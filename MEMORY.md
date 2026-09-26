@@ -37,13 +37,22 @@ res://
 ├── project.godot      — Jolt, GL Compatibility, input-карта, main-сцена
 ├── icon.svg
 ├── scenes/
-│   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D)
+│   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D
+│   │                             + InteractRay)
 │   ├── world/world_prototype.tscn — тестовая локация 60×60 (CSG blockout):
-│   │     земля, холм, 10 деревьев, 3 камня, 2 дома с дверными проёмами,
-│   │     невидимые стены Bounds, маркеры PickupSpawnPoints/PlayerSpawn
+│   │     земля, холм-конус, 10 деревьев, 3 камня, 2 дома с дверными проёмами,
+│   │     невидимые стены Bounds, маркеры PickupSpawnPoints/PlayerSpawn,
+│   │     3 заглушки PickupItem, HUD
+│   ├── interaction/pickup_item.tscn — подбираемый предмет (пока заглушка)
+│   ├── ui/hud.tscn               — CanvasLayer: прицел + подсказка
 │   └── tests/player_test.tscn    — песочница для изолированных тестов
 └── scripts/
-    └── player/player.gd          — FPS-контроллер (class_name Player)
+    ├── autoload/signal_hub.gd    — шина сигналов (AutoLoad SignalHub)
+    ├── player/player.gd          — FPS-контроллер (class_name Player)
+    ├── player/interact_ray.gd    — луч взаимодействия (class_name InteractRay)
+    ├── interaction/interactable.gd — базовый протокол (class_name Interactable)
+    ├── interaction/pickup_item.gd  — PickupItem (заглушка до инвентаря)
+    └── ui/hud.gd                 — HUD (class_name HUD), слушает SignalHub
 ```
 
 Input-действия: move_forward/back/left/right (WASD, физ. коды —
@@ -52,6 +61,9 @@ crouch (Ctrl), interact (E).
 Main-сцена: scenes/world/world_prototype.tscn (до появления game.tscn).
 Локация построена на CSG-примитивах (blockout): заменяется на реальные
 модели без изменения логики.
+Взаимодействие: RayCast3D (2.5 м) из камеры; объект под прицелом должен
+быть наследником Interactable с методами get_prompt()/interact(player).
+HUD сообщается с системами через SignalHub.prompt_changed.
 Путь к редактору на этой машине: E:/godot/Godot_v4.7.2-stable_win64.exe
 GitHub: https://github.com/goverfar-tech/govno-igra (private)
 
@@ -99,7 +111,7 @@ docs/      дизайн-заметки
 - [x] MEMORY.md согласован и зафиксирован
 - [x] Прототип: (1) игрок — FPS-контроллер + песочница tests/player_test
 - [x] Прототип: (2) локация — world_prototype (CSG blockout 60×60)
-- [ ] Прототип: (3) взаимодействие
+- [x] Прототип: (3) взаимодействие — InteractRay, HUD-подсказка, SignalHub
 - [ ] Прототип: (4) сбор ресурсов
 - [ ] Прототип: (5) инвентарь
 - [ ] Прототип: (6) survival-статы

@@ -1,6 +1,10 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
+
+[ext_resource type="PackedScene" path="res://scenes/interaction/pickup_item.tscn" id="2_pickup"]
+
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="3_hud"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -397,3 +401,16 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.2, 14)
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.2, 14)
+
+[node name="Pickups" type="Node3D" parent="."]
+
+[node name="Pickup1" parent="Pickups" instance=ExtResource("2_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.3, -9)
+
+[node name="Pickup2" parent="Pickups" instance=ExtResource("2_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.3, -4)
+
+[node name="Pickup3" parent="Pickups" instance=ExtResource("2_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 0.3, 12)
+
+[node name="HUD" parent="." instance=ExtResource("3_hud")]

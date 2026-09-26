@@ -1,6 +1,8 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
+
+[ext_resource type="Script" path="res://scripts/player/interact_ray.gd" id="2_ray"]
 
 [sub_resource type="CapsuleShape3D" id="player_capsule"]
 radius = 0.4
@@ -29,3 +31,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 [node name="Camera3D" type="Camera3D" parent="Head"]
 current = true
 fov = 75.0
+
+[node name="InteractRay" type="RayCast3D" parent="Head/Camera3D"]
+target_position = Vector3(0, 0, -2.5)
+collide_with_areas = false
+script = ExtResource("2_ray")

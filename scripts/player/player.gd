@@ -24,6 +24,7 @@ const PickupItemScene: PackedScene = preload("res://scenes/interaction/pickup_it
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
 @onready var head_clearance: ShapeCast3D = $HeadClearance
 @onready var inventory: Inventory = $Inventory
+@onready var stats: Stats = $Stats
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var is_crouching := false
@@ -57,10 +58,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if panel_open:
 		return
 	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			inventory.cycle_slot(-1)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			inventory.cycle_slot(1)
+		match event.button_index:
+			MOUSE_BUTTON_WHEEL_UP:
+				inventory.cycle_slot(-1)
+			MOUSE_BUTTON_WHEEL_DOWN:
+				inventory.cycle_slot(1)
+			MOUSE_BUTTON_LEFT:
+				if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+					use_selected_item()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode >= KEY_1 and event.keycode <= KEY_5:
 			inventory.select_slot(event.keycode - KEY_1)
@@ -122,6 +127,29 @@ func _update_headbob(delta: float, input_dir: Vector2) -> void:
 	else:
 		_bob_timer = 0.0
 		camera.position = camera.position.lerp(Vector3.ZERO, delta * 8.0)
+
+
+## Идёт ли игрок бегом прямо сейчас (для ускоренного расхода статов).
+func is_sprinting_now() -> bool:
+	if is_crouching or not is_on_floor():
+		return false
+	if not Input.is_action_pressed("sprint"):
+		return false
+	return Input.get_vector("move_left", "move_right", "move_forward", "move_back").length() > 0.1
+
+
+## Использовать предмет из активного слота хотбара (ЛКМ).
+func use_selected_item() -> void:
+	var data := inventory.get_selected_slot()
+	var item: ItemData = data.get("item")
+	if item == null:
+		return
+	if item.is_edible or item.nutrition > 0.0 or item.hydration > 0.0:
+		if inventory.remove_item(item, 1):
+			stats.apply_food(item.nutrition, item.hydration)
+			SignalHub.notify.emit("Съедено: %s" % item.display_name)
+	else:
+		SignalHub.notify.emit("Это нельзя съесть")
 
 
 ## Выбросить всю пачку из слота перед собой.

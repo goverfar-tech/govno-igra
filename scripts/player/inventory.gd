@@ -42,6 +42,11 @@ func cycle_slot(dir: int) -> void:
 	select_slot((selected_slot + dir + 5) % 5)
 
 
+## Содержимое активного слота хотбара.
+func get_selected_slot() -> Dictionary:
+	return slots[selected_slot]
+
+
 ## Забирает всю пачку из слота (для выбрасывания). Возвращает {"item","count"}.
 func take_all(index: int) -> Dictionary:
 	if index < 0 or index >= slots.size():

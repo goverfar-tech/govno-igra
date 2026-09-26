@@ -1,10 +1,12 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 
 [ext_resource type="Script" path="res://scripts/player/interact_ray.gd" id="2_ray"]
 
 [ext_resource type="Script" path="res://scripts/player/inventory.gd" id="3_inv"]
+
+[ext_resource type="Script" path="res://scripts/player/stats.gd" id="4_stats"]
 
 [sub_resource type="CapsuleShape3D" id="player_capsule"]
 radius = 0.4
@@ -41,3 +43,6 @@ script = ExtResource("2_ray")
 
 [node name="Inventory" type="Node" parent="."]
 script = ExtResource("3_inv")
+
+[node name="Stats" type="Node" parent="."]
+script = ExtResource("4_stats")

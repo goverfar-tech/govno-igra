@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
 
@@ -13,6 +13,8 @@
 [ext_resource type="Resource" path="res://resources/items/stone.tres" id="6_stone"]
 
 [ext_resource type="Resource" path="res://resources/items/berry.tres" id="7_berry"]
+
+[ext_resource type="Resource" path="res://resources/items/flask.tres" id="8_flask"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -424,6 +426,10 @@ item = ExtResource("6_stone")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 0.3, 12)
 item = ExtResource("7_berry")
 count = 3
+
+[node name="Pickup4" parent="Pickups" instance=ExtResource("2_pickup")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.3, 12)
+item = ExtResource("8_flask")
 
 [node name="ResourceNodes" type="Node3D" parent="."]
 

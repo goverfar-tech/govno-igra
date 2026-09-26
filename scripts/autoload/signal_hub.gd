@@ -16,3 +16,9 @@ signal inventory_open_changed(is_open: bool)
 
 ## Изменился активный слот хотбара (0..4).
 signal selection_changed(index: int)
+
+## Статы игрока изменились (значения 0..100).
+signal stats_changed(health: float, hunger: float, thirst: float)
+
+## Игрок погиб.
+signal player_died

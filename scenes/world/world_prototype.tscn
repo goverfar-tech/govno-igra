@@ -1,0 +1,397 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+
+[sub_resource type="StandardMaterial3D" id="mat_grass"]
+albedo_color = Color(0.35, 0.55, 0.3, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_rock"]
+albedo_color = Color(0.55, 0.55, 0.58, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_trunk"]
+albedo_color = Color(0.4, 0.28, 0.15, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_leaves"]
+albedo_color = Color(0.18, 0.42, 0.18, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_wall"]
+albedo_color = Color(0.72, 0.66, 0.55, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_roof"]
+albedo_color = Color(0.45, 0.2, 0.18, 1)
+
+[sub_resource type="BoxShape3D" id="bound_h"]
+size = Vector3(62, 4, 1)
+
+[sub_resource type="BoxShape3D" id="bound_v"]
+size = Vector3(1, 4, 62)
+
+[node name="WorldPrototype" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.433, 0.25, 0, 0.5, 0.866, -0.5, -0.75, 0.433, 0, 10, 0)
+shadow_enabled = true
+
+[node name="Ground" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+use_collision = true
+size = Vector3(60, 1, 60)
+material = SubResource("mat_grass")
+
+[node name="Hill" type="CSGSphere3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, -2.5, -16)
+use_collision = true
+radius = 5.0
+radial_segments = 32
+rings = 16
+material = SubResource("mat_grass")
+
+[node name="Bounds" type="Node3D" parent="."]
+
+[node name="North" type="StaticBody3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -30)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Bounds/North"]
+shape = SubResource("bound_h")
+
+[node name="South" type="StaticBody3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 30)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Bounds/South"]
+shape = SubResource("bound_h")
+
+[node name="East" type="StaticBody3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 2, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Bounds/East"]
+shape = SubResource("bound_v")
+
+[node name="West" type="StaticBody3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 2, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Bounds/West"]
+shape = SubResource("bound_v")
+
+[node name="Props" type="Node3D" parent="."]
+
+[node name="Tree1" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, 4)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree2" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, -6)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree3" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0, -2)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree4" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0, 6)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree5" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 16)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree6" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0, 18)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree6"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree6"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree7" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0, 14)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree7"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree7"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree8" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, -6)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree8"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree8"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree9" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -18)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree9"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree9"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Tree10" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, -14)
+
+[node name="Trunk" type="CSGCylinder3D" parent="Props/Tree10"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+use_collision = true
+radius = 0.25
+height = 2.5
+sides = 12
+material = SubResource("mat_trunk")
+
+[node name="Crown" type="CSGSphere3D" parent="Props/Tree10"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+radius = 1.4
+radial_segments = 16
+rings = 8
+material = SubResource("mat_leaves")
+
+[node name="Rock1" type="CSGBox3D" parent="Props"]
+transform = Transform3D(0.878, 0, 0.479, 0, 1, 0, -0.479, 0, 0.878, 8.5, 0.3, -8)
+use_collision = true
+size = Vector3(1.4, 0.8, 1.1)
+material = SubResource("mat_rock")
+
+[node name="Rock2" type="CSGBox3D" parent="Props"]
+transform = Transform3D(0.362, 0, 0.932, 0, 1, 0, -0.932, 0, 0.362, -13, 0.25, -6)
+use_collision = true
+size = Vector3(1.0, 0.6, 0.9)
+material = SubResource("mat_rock")
+
+[node name="Rock3" type="CSGBox3D" parent="Props"]
+transform = Transform3D(0.921, 0, -0.389, 0, 1, 0, 0.389, 0, 0.921, 12, 0.4, 10)
+use_collision = true
+size = Vector3(1.8, 1.0, 1.3)
+material = SubResource("mat_rock")
+
+[node name="Buildings" type="Node3D" parent="."]
+
+[node name="HouseA" type="Node3D" parent="Buildings"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0, -12)
+
+[node name="WallNorth" type="CSGBox3D" parent="Buildings/HouseA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -2.9)
+use_collision = true
+size = Vector3(6, 3, 0.2)
+material = SubResource("mat_wall")
+
+[node name="WallSouthLeft" type="CSGBox3D" parent="Buildings/HouseA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.75, 1.5, 2.9)
+use_collision = true
+size = Vector3(2.5, 3, 0.2)
+material = SubResource("mat_wall")
+
+[node name="WallSouthRight" type="CSGBox3D" parent="Buildings/HouseA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.75, 1.5, 2.9)
+use_collision = true
+size = Vector3(2.5, 3, 0.2)
+material = SubResource("mat_wall")
+
+[node name="DoorLintel" type="CSGBox3D" parent="Buildings/HouseA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.55, 2.9)
+use_collision = true
+size = Vector3(1.0, 0.9, 0.2)
+material = SubResource("mat_wall")
+
+[node name="WallWest" type="CSGBox3D" parent="Buildings/HouseA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 1.5, 0)
+use_collision = true
+size = Vector3(0.2, 3, 6)
+material = SubResource("mat_wall")
+
+[node name="WallEast" type="CSGBox3D" parent="Buildings/HouseA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.9, 1.5, 0)
+use_collision = true
+size = Vector3(0.2, 3, 6)
+material = SubResource("mat_wall")
+
+[node name="Roof" type="CSGBox3D" parent="Buildings/HouseA"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 0)
+use_collision = true
+size = Vector3(6.6, 0.2, 6.6)
+material = SubResource("mat_roof")
+
+[node name="HouseB" type="Node3D" parent="Buildings"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 8)
+
+[node name="WallNorth" type="CSGBox3D" parent="Buildings/HouseB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, -2.4)
+use_collision = true
+size = Vector3(5, 2.6, 0.2)
+material = SubResource("mat_wall")
+
+[node name="WallSouthLeft" type="CSGBox3D" parent="Buildings/HouseB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 1.3, 2.4)
+use_collision = true
+size = Vector3(2, 2.6, 0.2)
+material = SubResource("mat_wall")
+
+[node name="WallSouthRight" type="CSGBox3D" parent="Buildings/HouseB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 1.3, 2.4)
+use_collision = true
+size = Vector3(2, 2.6, 0.2)
+material = SubResource("mat_wall")
+
+[node name="DoorLintel" type="CSGBox3D" parent="Buildings/HouseB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.35, 2.4)
+use_collision = true
+size = Vector3(1, 0.5, 0.2)
+material = SubResource("mat_wall")
+
+[node name="WallWest" type="CSGBox3D" parent="Buildings/HouseB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.4, 1.3, 0)
+use_collision = true
+size = Vector3(0.2, 2.6, 5)
+material = SubResource("mat_wall")
+
+[node name="WallEast" type="CSGBox3D" parent="Buildings/HouseB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.4, 1.3, 0)
+use_collision = true
+size = Vector3(0.2, 2.6, 5)
+material = SubResource("mat_wall")
+
+[node name="Roof" type="CSGBox3D" parent="Buildings/HouseB"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.68, 0)
+use_collision = true
+size = Vector3(5.5, 0.15, 5.5)
+material = SubResource("mat_roof")
+
+[node name="PickupSpawnPoints" type="Node3D" parent="."]
+
+[node name="Point1" type="Marker3D" parent="PickupSpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.3, -9)
+
+[node name="Point2" type="Marker3D" parent="PickupSpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.3, -4)
+
+[node name="Point3" type="Marker3D" parent="PickupSpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 0.3, 12)
+
+[node name="Point4" type="Marker3D" parent="PickupSpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.3, 12)
+
+[node name="PlayerSpawn" type="Marker3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.2, 14)
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.2, 14)

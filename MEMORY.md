@@ -38,7 +38,10 @@ res://
 ├── icon.svg
 ├── scenes/
 │   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D)
-│   └── tests/player_test.tscn    — ВРЕМЕННАЯ тест-комната (заменится на world)
+│   ├── world/world_prototype.tscn — тестовая локация 60×60 (CSG blockout):
+│   │     земля, холм, 10 деревьев, 3 камня, 2 дома с дверными проёмами,
+│   │     невидимые стены Bounds, маркеры PickupSpawnPoints/PlayerSpawn
+│   └── tests/player_test.tscn    — песочница для изолированных тестов
 └── scripts/
     └── player/player.gd          — FPS-контроллер (class_name Player)
 ```
@@ -46,8 +49,9 @@ res://
 Input-действия: move_forward/back/left/right (WASD, физ. коды —
 работают на любой раскладке), sprint (Shift), jump (Space),
 crouch (Ctrl), interact (E).
-Main-сцена пока указана на scenes/tests/player_test.tscn (временно,
-до появления game.tscn).
+Main-сцена: scenes/world/world_prototype.tscn (до появления game.tscn).
+Локация построена на CSG-примитивах (blockout): заменяется на реальные
+модели без изменения логики.
 Путь к редактору на этой машине: E:/godot/Godot_v4.7.2-stable_win64.exe
 GitHub: https://github.com/goverfar-tech/govno-igra (private)
 
@@ -93,8 +97,8 @@ docs/      дизайн-заметки
 ## 9. Текущий статус
 - [x] Проект создан (Godot 4.7, Jolt, GL Compatibility, Git)
 - [x] MEMORY.md согласован и зафиксирован
-- [x] Прототип: (1) игрок — FPS-контроллер + временная тест-комната
-- [ ] Прототип: (2) локация
+- [x] Прототип: (1) игрок — FPS-контроллер + песочница tests/player_test
+- [x] Прототип: (2) локация — world_prototype (CSG blockout 60×60)
 - [ ] Прототип: (3) взаимодействие
 - [ ] Прототип: (4) сбор ресурсов
 - [ ] Прототип: (5) инвентарь

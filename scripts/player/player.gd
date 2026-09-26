@@ -32,6 +32,7 @@ var panel_open := false
 
 var _pitch := 0.0
 var _bob_timer := 0.0
+var _step_accum := 0.0
 
 
 func _ready() -> void:
@@ -88,6 +89,7 @@ func _physics_process(delta: float) -> void:
 
 	_update_headbob(delta, input_dir)
 	move_and_slide()
+	_update_footsteps(delta, input_dir)
 
 
 func _current_speed() -> float:
@@ -115,6 +117,18 @@ func _set_crouching(value: bool) -> void:
 	collision_shape.position.y = capsule.height * 0.5
 	var tween := create_tween()
 	tween.tween_property(head, "position:y", HEAD_CROUCH_Y if value else HEAD_STAND_Y, 0.15)
+
+
+## Шаги: звук каждые ~1.9 м пройденного пути; крадёмся — тише.
+func _update_footsteps(delta: float, input_dir: Vector2) -> void:
+	if is_on_floor() and input_dir.length() > 0.1:
+		_step_accum += Vector2(velocity.x, velocity.z).length() * delta
+		if _step_accum >= 1.9:
+			_step_accum = 0.0
+			var vol := -10.0 if is_crouching else (-5.0 if is_sprinting_now() else -7.0)
+			AudioManager.play_step(vol)
+	else:
+		_step_accum = 0.0
 
 
 func _update_headbob(delta: float, input_dir: Vector2) -> void:
@@ -145,6 +159,7 @@ func use_selected_item() -> void:
 	if item.is_edible or item.nutrition > 0.0 or item.hydration > 0.0:
 		if inventory.remove_item(item, 1):
 			stats.apply_food(item.nutrition, item.hydration)
+			AudioManager.play_eat()
 			SignalHub.notify.emit("Съедено: %s" % item.display_name)
 	else:
 		SignalHub.notify.emit("Это нельзя съесть")

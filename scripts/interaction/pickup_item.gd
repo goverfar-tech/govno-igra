@@ -30,6 +30,7 @@ func interact(player: Player) -> void:
 		return
 	var leftover := player.inventory.add_item(item, count)
 	if leftover <= 0:
+		AudioManager.play_pickup()
 		queue_free()
 	else:
 		count = leftover

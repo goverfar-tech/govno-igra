@@ -63,6 +63,7 @@ res://
 └── scripts/
     ├── main/game.gd              — сборка сцены, спаун игрока (class_name Game)
     ├── world/day_night.gd        — сутки 300 сек, день/ночь (class_name DayNight)
+    ├── autoload/audio_manager.gd — процедурные звуки: шаги/удары/подбор/еда/ветер
     ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,
     │                             inventory_changed, selection_changed,
     │                             inventory_open_changed, stats_changed,
@@ -143,6 +144,7 @@ docs/      дизайн-заметки
 **ВЕРТИКАЛЬНЫЙ ПРОТОТИП ЗАВЕРШЁН.**
 - [x] Этап 1.1 — цикл день/ночь (DayNight, 5-минутные сутки, сумерки,
       тост «Наступила ночь», сигнал time_of_day_changed)
-- [ ] Этап 1.2 — звук (шаги, амбиент, добыча)
+- [x] Этап 1.2 — звук: AudioManager синтезирует шаги, удары по источникам,
+      подбор, еду; фоновый ветер-амбьент
 - [ ] Этап 1.3 — больший мир: кусты ягод, родник, рельеф
 - [ ] Этап 1.4 — главное меню

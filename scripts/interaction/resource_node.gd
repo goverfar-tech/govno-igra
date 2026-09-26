@@ -27,5 +27,6 @@ func interact(player: Player) -> void:
 		SignalHub.notify.emit("Инвентарь полон!")
 		return
 	_hits_done += 1
+	AudioManager.play_hit(global_position)
 	if _hits_done >= hits_required:
 		queue_free()

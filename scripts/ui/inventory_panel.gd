@@ -61,7 +61,7 @@ func _build_slots() -> void:
 		_slot_labels.append(label)
 
 
-func _on_slot_gui_input(index: int, event: InputEvent) -> void:
+func _on_slot_gui_input(event: InputEvent, index: int) -> void:
 	if not (event is InputEventMouseButton and event.pressed) or _player == null:
 		return
 	if event.button_index == MOUSE_BUTTON_LEFT and index < 5:

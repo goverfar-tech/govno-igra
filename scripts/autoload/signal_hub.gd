@@ -10,3 +10,9 @@ signal notify(text: String)
 
 ## Содержимое инвентаря игрока изменилось (массив слотов-Dictionary).
 signal inventory_changed(slots: Array)
+
+## Панель инвентаря открылась/закрылась.
+signal inventory_open_changed(is_open: bool)
+
+## Изменился активный слот хотбара (0..4).
+signal selection_changed(index: int)

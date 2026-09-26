@@ -1,12 +1,14 @@
 class_name Player
 extends CharacterBody3D
-
-## FPS-контроллер: ходьба/бег/прыжок/присед, камера от первого лица, headbob.
+## FPS-контроллер: ходьба/бег/прыжок/присед, камера от первого лица, headbob,
+## выбор слота хотбара (1–5, колёсико), выброс предметов, захват мыши.
 
 const HEAD_STAND_Y: float = 1.6
 const HEAD_CROUCH_Y: float = 1.0
 const CAPSULE_STAND_HEIGHT: float = 1.8
 const CAPSULE_CROUCH_HEIGHT: float = 1.1
+
+const PickupItemScene: PackedScene = preload("res://scenes/interaction/pickup_item.tscn")
 
 @export var walk_speed: float = 4.0
 @export var sprint_speed: float = 7.0
@@ -25,25 +27,43 @@ const CAPSULE_CROUCH_HEIGHT: float = 1.1
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var is_crouching := false
+var panel_open := false
 
 var _pitch := 0.0
 var _bob_timer := 0.0
 
 
 func _ready() -> void:
+	add_to_group("player")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	SignalHub.inventory_open_changed.connect(_on_inventory_open_changed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if event is InputEventMouseMotion and not panel_open \
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(-event.relative.x * mouse_sensitivity)
 		_pitch = clampf(_pitch - event.relative.y * mouse_sensitivity, deg_to_rad(-89.0), deg_to_rad(89.0))
 		head.rotation.x = _pitch
 		return
 	if event.is_action_pressed("ui_cancel"):
+		if panel_open:
+			return  # панель закроется сама в своём обработчике
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
+	elif event is InputEventMouseButton and event.pressed and not panel_open \
+			and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	if panel_open:
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			inventory.cycle_slot(-1)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			inventory.cycle_slot(1)
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode >= KEY_1 and event.keycode <= KEY_5:
+			inventory.select_slot(event.keycode - KEY_1)
 
 
 func _physics_process(delta: float) -> void:
@@ -51,10 +71,12 @@ func _physics_process(delta: float) -> void:
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta
-	elif Input.is_action_just_pressed("jump") and not is_crouching:
+	elif Input.is_action_just_pressed("jump") and not is_crouching and not panel_open:
 		velocity.y = jump_velocity
 
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	if panel_open:
+		input_dir = Vector2.ZERO
 	var direction := (transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
 	var speed := _current_speed()
 
@@ -100,3 +122,23 @@ func _update_headbob(delta: float, input_dir: Vector2) -> void:
 	else:
 		_bob_timer = 0.0
 		camera.position = camera.position.lerp(Vector3.ZERO, delta * 8.0)
+
+
+## Выбросить всю пачку из слота перед собой.
+func drop_slot(index: int) -> void:
+	var data := inventory.take_all(index)
+	if data.get("item") == null:
+		return
+	var pickup := PickupItemScene.instantiate() as PickupItem
+	pickup.item = data["item"]
+	pickup.count = data["count"]
+	get_parent().add_child(pickup)
+	var dir := -camera.global_transform.basis.z
+	dir.y = 0.0
+	dir = dir.normalized()
+	pickup.global_position = global_position + dir * 1.2 + Vector3(0.0, 0.3, 0.0)
+
+
+func _on_inventory_open_changed(open: bool) -> void:
+	panel_open = open
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if open else Input.MOUSE_MODE_CAPTURED

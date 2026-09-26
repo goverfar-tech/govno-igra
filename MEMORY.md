@@ -46,8 +46,9 @@ res://
 │   ├── interaction/pickup_item.tscn         — подбираемый предмет
 │   ├── interaction/resource_node_tree.tscn  — добываемое дерево (3 удара = 6 дерева)
 │   ├── interaction/resource_node_rock.tscn  — камень-жилка (3 удара = 6 камней)
-│   ├── ui/hud.tscn    — CanvasLayer: прицел, подсказка, тосты, хотбар
-│   ├── ui/hotbar.tscn — 5 слотов внизу экрана
+│   ├── ui/hud.tscn    — CanvasLayer: прицел, подсказка, тосты, хотбар, панель инвентаря
+│   ├── ui/hotbar.tscn — 5 слотов внизу экрана (белая рамка = активный)
+│   ├── ui/inventory_panel.tscn — панель 20 слотов по Tab
 │   └── tests/player_test.tscn    — песочница для изолированных тестов
 ├── resources/items/  — item_data.gd (class_name ItemData) +
 │     stone.tres, wood.tres, berry.tres, flask.tres
@@ -123,6 +124,7 @@ docs/      дизайн-заметки
 - [x] Прототип: (3) взаимодействие — InteractRay, HUD-подсказка, SignalHub
 - [x] Прототип: (4) сбор ресурсов — ItemData-предметы, PickupItem,
       ResourceNode (дерево/жилка), ядро Inventory, хотбар
-- [ ] Прототип: (5) инвентарь
+- [x] Прототип: (5) инвентарь — панель по Tab, выбор слота 1–5/колёсико,
+      ПКМ выбрасывает пачку перед игроком
 - [ ] Прототип: (6) survival-статы
 - [ ] Прототип: (7) связка / main-сцена

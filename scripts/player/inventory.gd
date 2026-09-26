@@ -17,11 +17,41 @@ func _ready() -> void:
 		slots[i] = {"item": null, "count": 0}
 	changed.connect(_on_changed)
 	# UI может создаться позже — шлём первичное состояние отложенно
-	call_deferred("_on_changed")
+	call_deferred("_emit_initial")
 
 
 func _on_changed() -> void:
 	SignalHub.inventory_changed.emit(slots)
+
+
+func _emit_initial() -> void:
+	SignalHub.inventory_changed.emit(slots)
+	SignalHub.selection_changed.emit(selected_slot)
+
+
+## Активный слот хотбара (0..4).
+var selected_slot := 0
+
+
+func select_slot(index: int) -> void:
+	selected_slot = clampi(index, 0, 4)
+	SignalHub.selection_changed.emit(selected_slot)
+
+
+func cycle_slot(dir: int) -> void:
+	select_slot((selected_slot + dir + 5) % 5)
+
+
+## Забирает всю пачку из слота (для выбрасывания). Возвращает {"item","count"}.
+func take_all(index: int) -> Dictionary:
+	if index < 0 or index >= slots.size():
+		return {}
+	var slot := slots[index]
+	var out := slot.duplicate()
+	slot["item"] = null
+	slot["count"] = 0
+	changed.emit()
+	return out
 
 
 ## Кладёт предметы в инвентарь. Возвращает, сколько не влезло (0 = всё влезло).

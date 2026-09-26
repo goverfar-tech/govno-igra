@@ -34,10 +34,22 @@
 res://
 ├── MEMORY.md          — этот файл
 ├── README.md
-├── project.godot      — настроен: Jolt, GL Compatibility, stretch expand
+├── project.godot      — Jolt, GL Compatibility, input-карта, main-сцена
 ├── icon.svg
-└── (сцен и скриптов пока нет)
+├── scenes/
+│   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D)
+│   └── tests/player_test.tscn    — ВРЕМЕННАЯ тест-комната (заменится на world)
+└── scripts/
+    └── player/player.gd          — FPS-контроллер (class_name Player)
 ```
+
+Input-действия: move_forward/back/left/right (WASD, физ. коды —
+работают на любой раскладке), sprint (Shift), jump (Space),
+crouch (Ctrl), interact (E).
+Main-сцена пока указана на scenes/tests/player_test.tscn (временно,
+до появления game.tscn).
+Путь к редактору на этой машине: E:/godot/Godot_v4.7.2-stable_win64.exe
+GitHub: https://github.com/goverfar-tech/govno-igra (private)
 
 ## 5. Целевая структура (по мере роста)
 ```
@@ -81,7 +93,7 @@ docs/      дизайн-заметки
 ## 9. Текущий статус
 - [x] Проект создан (Godot 4.7, Jolt, GL Compatibility, Git)
 - [x] MEMORY.md согласован и зафиксирован
-- [ ] Прототип: (1) игрок
+- [x] Прототип: (1) игрок — FPS-контроллер + временная тест-комната
 - [ ] Прототип: (2) локация
 - [ ] Прототип: (3) взаимодействие
 - [ ] Прототип: (4) сбор ресурсов

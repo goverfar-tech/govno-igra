@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/interaction/resource_node.gd" id="1_node"]
+
+[ext_resource type="Resource" path="res://resources/items/stone.tres" id="2_stone"]
+
+[sub_resource type="BoxShape3D" id="col"]
+size = Vector3(1.2, 0.9, 1.0)
+
+[sub_resource type="StandardMaterial3D" id="rock_mat"]
+albedo_color = Color(0.45, 0.47, 0.5, 1)
+
+[sub_resource type="BoxMesh" id="rock_mesh"]
+material = SubResource("rock_mat")
+size = Vector3(1.2, 0.9, 1.0)
+
+[node name="ResourceRock" type="StaticBody3D"]
+script = ExtResource("1_node")
+item = ExtResource("2_stone")
+hits_required = 3
+yield_per_hit = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+shape = SubResource("col")
+
+[node name="RockMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, 0)
+mesh = SubResource("rock_mesh")

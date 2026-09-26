@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/items/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"berry"
+display_name = "Ягода"
+icon_color = Color(0.75, 0.15, 0.25, 1)
+max_stack = 20
+is_edible = true
+nutrition = 12.0

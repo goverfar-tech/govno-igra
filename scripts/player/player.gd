@@ -21,6 +21,7 @@ const CAPSULE_CROUCH_HEIGHT: float = 1.1
 @onready var camera: Camera3D = $Head/Camera3D
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
 @onready var head_clearance: ShapeCast3D = $HeadClearance
+@onready var inventory: Inventory = $Inventory
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var is_crouching := false

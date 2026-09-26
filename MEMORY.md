@@ -38,21 +38,30 @@ res://
 ├── icon.svg
 ├── scenes/
 │   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D
-│   │                             + InteractRay)
+│   │                             + InteractRay + Inventory)
 │   ├── world/world_prototype.tscn — тестовая локация 60×60 (CSG blockout):
-│   │     земля, холм-конус, 10 деревьев, 3 камня, 2 дома с дверными проёмами,
-│   │     невидимые стены Bounds, маркеры PickupSpawnPoints/PlayerSpawn,
-│   │     3 заглушки PickupItem, HUD
-│   ├── interaction/pickup_item.tscn — подбираемый предмет (пока заглушка)
-│   ├── ui/hud.tscn               — CanvasLayer: прицел + подсказка
+│   │     земля, холм-конус, 10 деревьев-декора, 3 камня, 2 дома с дверными
+│   │     проёмами, невидимые стены Bounds, 3 PickupItem (камни, ягоды),
+│   │     2 добываемых дерева + 1 камень-жилка, HUD
+│   ├── interaction/pickup_item.tscn         — подбираемый предмет
+│   ├── interaction/resource_node_tree.tscn  — добываемое дерево (3 удара = 6 дерева)
+│   ├── interaction/resource_node_rock.tscn  — камень-жилка (3 удара = 6 камней)
+│   ├── ui/hud.tscn    — CanvasLayer: прицел, подсказка, тосты, хотбар
+│   ├── ui/hotbar.tscn — 5 слотов внизу экрана
 │   └── tests/player_test.tscn    — песочница для изолированных тестов
-└── scripts/
-    ├── autoload/signal_hub.gd    — шина сигналов (AutoLoad SignalHub)
-    ├── player/player.gd          — FPS-контроллер (class_name Player)
-    ├── player/interact_ray.gd    — луч взаимодействия (class_name InteractRay)
-    ├── interaction/interactable.gd — базовый протокол (class_name Interactable)
-    ├── interaction/pickup_item.gd  — PickupItem (заглушка до инвентаря)
-    └── ui/hud.gd                 — HUD (class_name HUD), слушает SignalHub
+├── resources/items/  — item_data.gd (class_name ItemData) +
+│     stone.tres, wood.tres, berry.tres, flask.tres
+├── scripts/
+│   ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,
+│   │                             inventory_changed)
+│   ├── player/player.gd          — FPS-контроллер (class_name Player)
+│   ├── player/interact_ray.gd    — луч взаимодействия (class_name InteractRay)
+│   ├── player/inventory.gd       — ядро инвентаря, 20 слотов (class_name Inventory)
+│   ├── interaction/interactable.gd — базовый протокол (class_name Interactable)
+│   ├── interaction/pickup_item.gd  — PickupItem (ItemData + count)
+│   ├── interaction/resource_node.gd — ResourceNode (hits_required, yield_per_hit)
+│   ├── ui/hud.gd    — HUD (class_name HUD)
+│   └── ui/hotbar.gd — Hotbar (5 первых слотов)
 ```
 
 Input-действия: move_forward/back/left/right (WASD, физ. коды —
@@ -112,7 +121,8 @@ docs/      дизайн-заметки
 - [x] Прототип: (1) игрок — FPS-контроллер + песочница tests/player_test
 - [x] Прототип: (2) локация — world_prototype (CSG blockout 60×60)
 - [x] Прототип: (3) взаимодействие — InteractRay, HUD-подсказка, SignalHub
-- [ ] Прототип: (4) сбор ресурсов
+- [x] Прототип: (4) сбор ресурсов — ItemData-предметы, PickupItem,
+      ResourceNode (дерево/жилка), ядро Inventory, хотбар
 - [ ] Прототип: (5) инвентарь
 - [ ] Прототип: (6) survival-статы
 - [ ] Прототип: (7) связка / main-сцена

@@ -1,10 +1,18 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
 
 [ext_resource type="PackedScene" path="res://scenes/interaction/pickup_item.tscn" id="2_pickup"]
 
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="3_hud"]
+
+[ext_resource type="PackedScene" path="res://scenes/interaction/resource_node_tree.tscn" id="4_rtree"]
+
+[ext_resource type="PackedScene" path="res://scenes/interaction/resource_node_rock.tscn" id="5_rrock"]
+
+[ext_resource type="Resource" path="res://resources/items/stone.tres" id="6_stone"]
+
+[ext_resource type="Resource" path="res://resources/items/berry.tres" id="7_berry"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 
@@ -406,11 +414,26 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.2, 14)
 
 [node name="Pickup1" parent="Pickups" instance=ExtResource("2_pickup")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.3, -9)
+item = ExtResource("6_stone")
 
 [node name="Pickup2" parent="Pickups" instance=ExtResource("2_pickup")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.3, -4)
+item = ExtResource("6_stone")
 
 [node name="Pickup3" parent="Pickups" instance=ExtResource("2_pickup")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 0.3, 12)
+item = ExtResource("7_berry")
+count = 3
+
+[node name="ResourceNodes" type="Node3D" parent="."]
+
+[node name="ResourceTreeA" parent="ResourceNodes" instance=ExtResource("4_rtree")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, -8)
+
+[node name="ResourceTreeB" parent="ResourceNodes" instance=ExtResource("4_rtree")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 12)
+
+[node name="ResourceRock" parent="ResourceNodes" instance=ExtResource("5_rrock")]
+transform = Transform3D(0.985, 0, 0.174, 0, 1, 0, -0.174, 0, 0.985, 20, 0.2, 4)
 
 [node name="HUD" parent="." instance=ExtResource("3_hud")]

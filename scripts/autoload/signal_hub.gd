@@ -22,3 +22,6 @@ signal stats_changed(health: float, hunger: float, thirst: float)
 
 ## Игрок погиб.
 signal player_died
+
+## Время суток изменилось (0..1: 0 — полночь, 0.25 — восход, 0.5 — полдень).
+signal time_of_day_changed(time: float)

@@ -62,6 +62,7 @@ res://
 │     stone.tres, wood.tres, berry.tres, flask.tres
 └── scripts/
     ├── main/game.gd              — сборка сцены, спаун игрока (class_name Game)
+    ├── world/day_night.gd        — сутки 300 сек, день/ночь (class_name DayNight)
     ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,
     │                             inventory_changed, selection_changed,
     │                             inventory_open_changed, stats_changed,
@@ -139,6 +140,9 @@ docs/      дизайн-заметки
       предмет, экран смерти + рестарт
 - [x] Прототип: (7) связка — game.tscn (World+Player+HUD), пауза по Esc
 
-**ВЕРТИКАЛЬНЫЙ ПРОТОТИП ЗАВЕРШЁН.** Следующее — Этап 1 (осмысленный мир)
-или то, что решит автор; архитектуру каждой следующей системы
-сначала согласовываем.
+**ВЕРТИКАЛЬНЫЙ ПРОТОТИП ЗАВЕРШЁН.**
+- [x] Этап 1.1 — цикл день/ночь (DayNight, 5-минутные сутки, сумерки,
+      тост «Наступила ночь», сигнал time_of_day_changed)
+- [ ] Этап 1.2 — звук (шаги, амбиент, добыча)
+- [ ] Этап 1.3 — больший мир: кусты ягод, родник, рельеф
+- [ ] Этап 1.4 — главное меню

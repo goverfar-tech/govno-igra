@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_script"]
 
@@ -7,6 +7,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/inventory_panel.tscn" id="3_panel"]
 
 [ext_resource type="PackedScene" path="res://scenes/ui/death_screen.tscn" id="4_death"]
+
+[ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="5_pause"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_script")
@@ -123,3 +125,5 @@ vertical_alignment = 1
 [node name="InventoryPanel" parent="." instance=ExtResource("3_panel")]
 
 [node name="DeathScreen" parent="." instance=ExtResource("4_death")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("5_pause")]

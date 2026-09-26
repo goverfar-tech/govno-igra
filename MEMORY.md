@@ -34,48 +34,56 @@
 res://
 ├── MEMORY.md          — этот файл
 ├── README.md
-├── project.godot      — Jolt, GL Compatibility, input-карта, main-сцена
+├── build.bat          — сборка builds/survival.exe одним запуском
+├── export_presets.cfg — пресет Windows Desktop
+├── project.godot      — Jolt, GL Compatibility, input-карта,
+│                        main-сцена: scenes/main/game.tscn
 ├── icon.svg
 ├── scenes/
-│   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D
-│   │                             + InteractRay + Inventory)
+│   ├── main/game.tscn — MAIN: World + Player + HUD (спаун по марkеру мира)
+│   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D)
+│   │     дочерние: InteractRay, Inventory, Stats
 │   ├── world/world_prototype.tscn — тестовая локация 60×60 (CSG blockout):
 │   │     земля, холм-конус, 10 деревьев-декора, 3 камня, 2 дома с дверными
-│   │     проёмами, невидимые стены Bounds, 3 PickupItem (камни, ягоды),
-│   │     2 добываемых дерева + 1 камень-жилка, HUD
+│   │     проёмами, Bounds-стены, маркеры PickupSpawnPoints/PlayerSpawn,
+│   │     4 PickupItem (камни х2, ягоды х3, фляга), 2 добываемых дерева,
+│   │     камень-жилка
 │   ├── interaction/pickup_item.tscn         — подбираемый предмет
-│   ├── interaction/resource_node_tree.tscn  — добываемое дерево (3 удара = 6 дерева)
-│   ├── interaction/resource_node_rock.tscn  — камень-жилка (3 удара = 6 камней)
-│   ├── ui/hud.tscn    — CanvasLayer: прицел, подсказка, тосты, хотбар, панель инвентаря
-│   ├── ui/hotbar.tscn — 5 слотов внизу экрана (белая рамка = активный)
-│   ├── ui/inventory_panel.tscn — панель 20 слотов по Tab
-│   └── tests/player_test.tscn    — песочница для изолированных тестов
+│   ├── interaction/resource_node_tree.tscn  — добываемое дерево (3 удара)
+│   ├── interaction/resource_node_rock.tscn  — камень-жилка (3 удара)
+│   ├── ui/hud.tscn      — CanvasLayer: статы, прицел, подсказка, тосты,
+│   │                    хотбар, панель инвентаря, экран смерти, пауза
+│   ├── ui/hotbar.tscn          — 5 слотов (белая рамка = активный)
+│   ├── ui/inventory_panel.tscn — 20 слотов по Tab, ПКМ выбрасывает
+│   ├── ui/death_screen.tscn    — экран смерти + рестарт
+│   ├── ui/pause_menu.tscn      — меню паузы по Esc
+│   └── tests/player_test.tscn  — песочница для изолированных тестов
 ├── resources/items/  — item_data.gd (class_name ItemData) +
 │     stone.tres, wood.tres, berry.tres, flask.tres
-├── scripts/
-│   ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,
-│   │                             inventory_changed)
-│   ├── player/player.gd          — FPS-контроллер (class_name Player)
-│   ├── player/interact_ray.gd    — луч взаимодействия (class_name InteractRay)
-│   ├── player/inventory.gd       — ядро инвентаря, 20 слотов (class_name Inventory)
-│   ├── interaction/interactable.gd — базовый протокол (class_name Interactable)
-│   ├── interaction/pickup_item.gd  — PickupItem (ItemData + count)
-│   ├── interaction/resource_node.gd — ResourceNode (hits_required, yield_per_hit)
-│   ├── ui/hud.gd    — HUD (class_name HUD)
-│   └── ui/hotbar.gd — Hotbar (5 первых слотов)
+└── scripts/
+    ├── main/game.gd              — сборка сцены, спаун игрока (class_name Game)
+    ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,
+    │                             inventory_changed, selection_changed,
+    │                             inventory_open_changed, stats_changed,
+    │                             player_died)
+    ├── player/player.gd          — FPS-контроллер (class_name Player)
+    ├── player/interact_ray.gd    — луч взаимодействия (class_name InteractRay)
+    ├── player/inventory.gd       — инвентарь 20 слотов (class_name Inventory)
+    ├── player/stats.gd           — HP/сытость/жажда (class_name Stats)
+    ├── interaction/interactable.gd  — протокол (class_name Interactable)
+    ├── interaction/pickup_item.gd   — PickupItem
+    ├── interaction/resource_node.gd — ResourceNode
+    ├── ui/hud.gd, ui/hotbar.gd, ui/inventory_panel.gd,
+    └── ui/death_screen.gd, ui/pause_menu.gd
 ```
 
-Input-действия: move_forward/back/left/right (WASD, физ. коды —
-работают на любой раскладке), sprint (Shift), jump (Space),
-crouch (Ctrl), interact (E).
-Main-сцена: scenes/world/world_prototype.tscn (до появления game.tscn).
-Локация построена на CSG-примитивах (blockout): заменяется на реальные
-модели без изменения логики.
-Взаимодействие: RayCast3D (2.5 м) из камеры; объект под прицелом должен
-быть наследником Interactable с методами get_prompt()/interact(player).
-HUD сообщается с системами через SignalHub.prompt_changed.
-Путь к редактору на этой машине: E:/godot/Godot_v4.7.2-stable_win64.exe
-GitHub: https://github.com/goverfar-tech/govno-igra (private)
+Input-действия: move_forward/back/left/right (WASD, физ. коды),
+sprint (Shift), jump (Space), crouch (Ctrl), interact (E),
+toggle_inventory (Tab). Esc — пауза/закрытие панели.
+ЛКМ — использовать активный предмет (съесть/выпить).
+Взаимодействие: RayCast3D (2.5 м) из камеры; цель — наследник
+Interactable с get_prompt()/interact(player).
+Системы общаются через SignalHub, напрямую в чужие узлы не лезут.
 
 ## 5. Целевая структура (по мере роста)
 ```
@@ -129,4 +137,8 @@ docs/      дизайн-заметки
 - [x] Прототип: (6) survival-статы — HP/сытость/жажда (Stats у игрока),
       бег ×1.6 расход, голод/жажда → потеря HP, ЛКМ = съесть активный
       предмет, экран смерти + рестарт
-- [ ] Прототип: (7) связка / main-сцена
+- [x] Прототип: (7) связка — game.tscn (World+Player+HUD), пауза по Esc
+
+**ВЕРТИКАЛЬНЫЙ ПРОТОТИП ЗАВЕРШЁН.** Следующее — Этап 1 (осмысленный мир)
+или то, что решит автор; архитектуру каждой следующей системы
+сначала согласовываем.

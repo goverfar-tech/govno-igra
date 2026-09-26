@@ -48,9 +48,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		head.rotation.x = _pitch
 		return
 	if event.is_action_pressed("ui_cancel"):
-		if panel_open:
-			return  # панель закроется сама в своём обработчике
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return  # Esc обрабатывает меню паузы / панель инвентаря
 	elif event is InputEventMouseButton and event.pressed and not panel_open \
 			and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

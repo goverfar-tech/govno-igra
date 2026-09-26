@@ -1,10 +1,6 @@
-[gd_scene load_steps=20 format=3]
-
-[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="1_player"]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/interaction/pickup_item.tscn" id="2_pickup"]
-
-[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="3_hud"]
 
 [ext_resource type="PackedScene" path="res://scenes/interaction/resource_node_tree.tscn" id="4_rtree"]
 
@@ -409,9 +405,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.3, 12)
 [node name="PlayerSpawn" type="Marker3D" parent="."]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.2, 14)
 
-[node name="Player" parent="." instance=ExtResource("1_player")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.2, 14)
-
 [node name="Pickups" type="Node3D" parent="."]
 
 [node name="Pickup1" parent="Pickups" instance=ExtResource("2_pickup")]
@@ -441,5 +434,3 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 12)
 
 [node name="ResourceRock" parent="ResourceNodes" instance=ExtResource("5_rrock")]
 transform = Transform3D(0.985, 0, 0.174, 0, 1, 0, -0.174, 0, 0.985, 20, 0.2, 4)
-
-[node name="HUD" parent="." instance=ExtResource("3_hud")]

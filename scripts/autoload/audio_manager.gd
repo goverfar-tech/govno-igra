@@ -41,13 +41,13 @@ func play_eat() -> void:
 
 
 ## Хрюканье/фырканье кабана (позиционное).
-func play_grunt(pos: Vector3) -> void:
-	_play_3d(_grunt_stream, pos, -12.0)
+func play_grunt(pos: Vector3, volume_db := -6.0) -> void:
+	_play_3d(_grunt_stream, pos, volume_db)
 
 
 ## Визг-агро.
 func play_squeal(pos: Vector3) -> void:
-	_play_3d(_squeal_stream, pos, -14.0)
+	_play_3d(_squeal_stream, pos, -6.0)
 
 
 # ---------- генерация ----------
@@ -186,6 +186,7 @@ func _play_3d(stream: AudioStreamWAV, pos: Vector3, volume_db: float) -> void:
 	var p := AudioStreamPlayer3D.new()
 	p.stream = stream
 	p.volume_db = volume_db
+	p.unit_size = 12.0
 	p.pitch_scale = randf_range(0.94, 1.08)
 	p.finished.connect(p.queue_free)
 	scene.add_child(p)

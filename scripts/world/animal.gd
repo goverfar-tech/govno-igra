@@ -134,7 +134,7 @@ func _attack(delta: float) -> void:
 	velocity.z = move_toward(velocity.z, 0.0, run_speed * delta * 8.0)
 	_windup_timer -= delta
 	if _windup_timer <= 0.0:
-		AudioManager.play_grunt(global_position)
+		AudioManager.play_grunt(global_position, -16.0)
 		if _player_dist() < attack_radius + 0.6:
 			_player.stats.take_damage(damage)
 		_cooldown_timer = attack_cooldown

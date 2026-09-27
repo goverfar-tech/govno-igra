@@ -44,12 +44,12 @@ func _build_slots() -> void:
 	for i in SLOT_COUNT:
 		var panel := PanelContainer.new()
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.12, 0.12, 0.12, 0.9)
-		sb.set_border_width_all(2)
-		sb.border_color = Color(0.35, 0.35, 0.35)
+		sb.bg_color = Color(0.05, 0.05, 0.07, 0.9)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(0.3, 0.3, 0.33)
 		panel.add_theme_stylebox_override("panel", sb)
 		var bg := ColorRect.new()
-		bg.custom_minimum_size = Vector2(48, 48)
+		bg.custom_minimum_size = Vector2(44, 44)
 		bg.color = Color(0, 0, 0, 0)
 		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var label := Label.new()
@@ -109,4 +109,4 @@ func _refresh_selection(selected: int) -> void:
 		elif i == selected:
 			sb.border_color = Color(1, 1, 1)
 		else:
-			sb.border_color = Color(0.35, 0.35, 0.35)
+			sb.border_color = Color(0.3, 0.3, 0.33)

@@ -14,13 +14,13 @@ func _ready() -> void:
 	for i in SLOT_COUNT:
 		var panel := PanelContainer.new()
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.12, 0.12, 0.12, 0.85)
-		sb.set_border_width_all(2)
-		sb.border_color = Color(0.35, 0.35, 0.35)
+		sb.bg_color = Color(0.05, 0.05, 0.07, 0.75)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(0.3, 0.3, 0.33)
 		panel.add_theme_stylebox_override("panel", sb)
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var bg := ColorRect.new()
-		bg.custom_minimum_size = Vector2(44, 44)
+		bg.custom_minimum_size = Vector2(40, 40)
 		bg.color = Color(0, 0, 0, 0)
 		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var label := Label.new()

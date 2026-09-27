@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_script"]
 
@@ -13,6 +13,46 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/craft_panel.tscn" id="6_craft"]
 
 [ext_resource type="PackedScene" path="res://scenes/ui/minimap.tscn" id="7_minimap"]
+
+[sub_resource type="StyleBoxFlat" id="bar_bg"]
+bg_color = Color(0.05, 0.05, 0.07, 0.6)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="fill_hp"]
+bg_color = Color(0.55, 0.18, 0.15, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="fill_hunger"]
+bg_color = Color(0.6, 0.42, 0.18, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="fill_thirst"]
+bg_color = Color(0.25, 0.45, 0.65, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="panel_dark"]
+bg_color = Color(0.05, 0.05, 0.07, 0.75)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.3, 0.33, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_script")
@@ -30,9 +70,9 @@ modulate = Color(1, 1, 1, 0)
 anchors_preset = 0
 offset_left = 12.0
 offset_top = 12.0
-offset_right = 200.0
-offset_bottom = 90.0
-theme_override_constants/separation = 6
+offset_right = 190.0
+offset_bottom = 72.0
+theme_override_constants/separation = 5
 mouse_filter = 2
 
 [node name="HealthRow" type="HBoxContainer" parent="StatsBars"]
@@ -40,15 +80,18 @@ theme_override_constants/separation = 6
 mouse_filter = 2
 
 [node name="Label" type="Label" parent="StatsBars/HealthRow"]
-custom_minimum_size = Vector2(70, 0)
+custom_minimum_size = Vector2(52, 0)
 mouse_filter = 2
+theme_override_font_sizes/font_size = 11
 text = "HP"
 
 [node name="BarHealth" type="ProgressBar" parent="StatsBars/HealthRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 14)
+custom_minimum_size = Vector2(120, 8)
 size_flags_vertical = 5
 mouse_filter = 2
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("fill_hp")
 max_value = 100.0
 value = 100.0
 show_percentage = false
@@ -58,15 +101,18 @@ theme_override_constants/separation = 6
 mouse_filter = 2
 
 [node name="Label" type="Label" parent="StatsBars/HungerRow"]
-custom_minimum_size = Vector2(70, 0)
+custom_minimum_size = Vector2(52, 0)
 mouse_filter = 2
+theme_override_font_sizes/font_size = 11
 text = "Сытость"
 
 [node name="BarHunger" type="ProgressBar" parent="StatsBars/HungerRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 14)
+custom_minimum_size = Vector2(120, 8)
 size_flags_vertical = 5
 mouse_filter = 2
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("fill_hunger")
 max_value = 100.0
 value = 100.0
 show_percentage = false
@@ -76,15 +122,18 @@ theme_override_constants/separation = 6
 mouse_filter = 2
 
 [node name="Label" type="Label" parent="StatsBars/ThirstRow"]
-custom_minimum_size = Vector2(70, 0)
+custom_minimum_size = Vector2(52, 0)
 mouse_filter = 2
+theme_override_font_sizes/font_size = 11
 text = "Жажда"
 
 [node name="BarThirst" type="ProgressBar" parent="StatsBars/ThirstRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 14)
+custom_minimum_size = Vector2(120, 8)
 size_flags_vertical = 5
 mouse_filter = 2
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("fill_thirst")
 max_value = 100.0
 value = 100.0
 show_percentage = false
@@ -96,15 +145,16 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -2.0
-offset_top = -2.0
-offset_right = 2.0
-offset_bottom = 2.0
+offset_left = -1.5
+offset_top = -1.5
+offset_right = 1.5
+offset_bottom = 1.5
 mouse_filter = 2
-color = Color(1, 1, 1, 0.6)
+color = Color(1, 1, 1, 0.5)
 
 [node name="PromptLabel" type="Label" parent="."]
 unique_name_in_owner = true
+theme_override_font_sizes/font_size = 13
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -120,6 +170,7 @@ vertical_alignment = 1
 
 [node name="ToastLabel" type="Label" parent="."]
 unique_name_in_owner = true
+theme_override_font_sizes/font_size = 13
 anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0

@@ -47,7 +47,7 @@ func _update_lights() -> void:
 	var day_f := clampf(sun_elev, 0.0, 1.0)
 
 	sun.visible = sun_elev > -0.05
-	sun.light_energy = day_f * 0.9
+	sun.light_energy = day_f * 0.8
 	sun.light_color = Color(1, 1, 1).lerp(Color(1.0, 0.55, 0.25), dusk)
 
 	moon.visible = moon_elev > 0.0
@@ -61,6 +61,6 @@ func _update_lights() -> void:
 		sky_mat.ground_bottom_color = Color(0.01, 0.01, 0.02).lerp(Color(0.22, 0.2, 0.17), day_f)
 		sky_mat.ground_horizon_color = Color(0.05, 0.06, 0.12).lerp(Color(0.55, 0.55, 0.55), day_f)
 
-	world_env.environment.ambient_light_energy = lerpf(0.2, 0.8, day_f)
+	world_env.environment.ambient_light_energy = lerpf(0.18, 0.65, day_f)
 	var env := world_env.environment
 	env.fog_light_color = Color(0.03, 0.04, 0.07).lerp(Color(0.58, 0.62, 0.68), day_f).lerp(Color(0.9, 0.5, 0.25), dusk * day_f * 0.5)

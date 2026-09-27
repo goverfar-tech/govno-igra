@@ -1,0 +1,52 @@
+[gd_scene load_steps=5 format=3]
+
+[sub_resource type="StandardMaterial3D" id="wall_mat"]
+albedo_color = Color(0.52, 0.5, 0.47, 1)
+roughness = 0.9
+
+[sub_resource type="BoxShape3D" id="wall_n"]
+size = Vector3(5, 2.4, 0.2)
+
+[sub_resource type="BoxShape3D" id="wall_side"]
+size = Vector3(0.2, 2.4, 5)
+
+[sub_resource type="BoxShape3D" id="wall_broken"]
+size = Vector3(3.2, 2.4, 0.2)
+
+[node name="Ruin" type="Node3D"]
+
+[node name="WallNorth" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -2.4)
+use_collision = true
+size = Vector3(5, 2.4, 0.2)
+material = SubResource("wall_mat")
+
+[node name="WallSouthBroken" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.9, 1.2, 2.4)
+use_collision = true
+size = Vector3(3.2, 2.4, 0.2)
+material = SubResource("wall_mat")
+
+[node name="WallWest" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.4, 1.2, 0)
+use_collision = true
+size = Vector3(0.2, 2.4, 5)
+material = SubResource("wall_mat")
+
+[node name="WallEastBroken" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.4, 0.7, -0.9)
+use_collision = true
+size = Vector3(0.2, 1.4, 3.2)
+material = SubResource("wall_mat")
+
+[node name="Debris1" type="CSGBox3D" parent="."]
+transform = Transform3D(0.94, 0, 0.342, 0, 1, 0, -0.342, 0, 0.94, 1.2, 0.25, 1.4)
+use_collision = true
+size = Vector3(1.2, 0.5, 1.0)
+material = SubResource("wall_mat")
+
+[node name="Debris2" type="CSGBox3D" parent="."]
+transform = Transform3D(0.985, 0, -0.174, 0, 1, 0, 0.174, 0, 0.985, -1.0, 0.18, -1.5)
+use_collision = true
+size = Vector3(0.9, 0.35, 0.7)
+material = SubResource("wall_mat")

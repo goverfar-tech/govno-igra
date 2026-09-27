@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[sub_resource type="StandardMaterial3D" id="tire_mat"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+
+[sub_resource type="CylinderShape3D" id="col"]
+radius = 0.4
+height = 0.25
+
+[sub_resource type="CylinderMesh" id="mesh"]
+material = SubResource("tire_mat")
+top_radius = 0.4
+bottom_radius = 0.4
+height = 0.25
+radial_segments = 14
+
+[node name="Tire" type="StaticBody3D"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.125, 0)
+shape = SubResource("col")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.125, 0)
+mesh = SubResource("mesh")

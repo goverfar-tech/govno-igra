@@ -10,6 +10,8 @@ var _step_stream: AudioStreamWAV
 var _hit_stream: AudioStreamWAV
 var _pickup_stream: AudioStreamWAV
 var _eat_stream: AudioStreamWAV
+var _grunt_stream: AudioStreamWAV
+var _squeal_stream: AudioStreamWAV
 
 
 func _ready() -> void:
@@ -17,6 +19,8 @@ func _ready() -> void:
 	_hit_stream = _make_hit()
 	_pickup_stream = _make_blip(660.0, 880.0, 0.12)
 	_eat_stream = _make_blip(440.0, 260.0, 0.25)
+	_grunt_stream = _make_grunt()
+	_squeal_stream = _make_blip(420.0, 900.0, 0.22)
 	_play_ambient(_make_wind())
 
 
@@ -34,6 +38,16 @@ func play_pickup() -> void:
 
 func play_eat() -> void:
 	_play_flat(_eat_stream, -15.0)
+
+
+## Хрюканье/фырканье кабана (позиционное).
+func play_grunt(pos: Vector3) -> void:
+	_play_3d(_grunt_stream, pos, -12.0)
+
+
+## Визг-агро.
+func play_squeal(pos: Vector3) -> void:
+	_play_3d(_squeal_stream, pos, -14.0)
 
 
 # ---------- генерация ----------
@@ -131,6 +145,26 @@ func _make_wind() -> AudioStreamWAV:
 	s.loop_begin = 0
 	s.loop_end = n - 1
 	return s
+
+
+## Кабан: низкий хриплый свинячий тон с шумом.
+func _make_grunt() -> AudioStreamWAV:
+	var dur := 0.30
+	var n := int(SAMPLE_RATE * dur)
+	var f := PackedFloat32Array()
+	f.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var phase := 0.0
+	for i in n:
+		var t := float(i) / n
+		var env := sin(t * PI)  # нарастание-спад
+		var freq := lerpf(110.0, 65.0, t)
+		phase += freq * TAU / SAMPLE_RATE
+		var tone := sin(phase) * 0.5 + sin(phase * 2.0) * 0.2
+		var noise := rng.randf_range(-1.0, 1.0) * 0.25
+		f[i] = (tone + noise) * env * 0.45
+	return _make_wav(f)
 
 
 # ---------- проигрывание ----------

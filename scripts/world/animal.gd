@@ -27,6 +27,7 @@ var _idle_timer := 0.0
 var _windup_timer := 0.0
 var _cooldown_timer := 0.0
 var _lose_timer := 0.0
+var _grunt_timer := 3.0
 var _gravity: float
 
 
@@ -82,8 +83,13 @@ func _idle(delta: float) -> void:
 		var off := Vector2.from_angle(randf() * TAU) * randf() * home_radius
 		_target = _home + Vector3(off.x, 0, off.y)
 		_state = State.WANDER
+	_grunt_timer -= delta
+	if _grunt_timer <= 0.0 and _player_dist() < 18.0:
+		AudioManager.play_grunt(global_position)
+		_grunt_timer = randf_range(4.0, 9.0)
 	if _player_dist() < detection_radius:
 		_state = State.CHASE
+		AudioManager.play_squeal(global_position)
 
 
 func _wander(delta: float) -> void:
@@ -94,6 +100,7 @@ func _wander(delta: float) -> void:
 		_idle_timer = randf_range(1.5, 4.0)
 	if _player_dist() < detection_radius:
 		_state = State.CHASE
+		AudioManager.play_squeal(global_position)
 
 
 func _chase(delta: float) -> void:
@@ -127,6 +134,7 @@ func _attack(delta: float) -> void:
 	velocity.z = move_toward(velocity.z, 0.0, run_speed * delta * 8.0)
 	_windup_timer -= delta
 	if _windup_timer <= 0.0:
+		AudioManager.play_grunt(global_position)
 		if _player_dist() < attack_radius + 0.6:
 			_player.stats.take_damage(damage)
 		_cooldown_timer = attack_cooldown

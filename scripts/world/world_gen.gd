@@ -176,9 +176,9 @@ func apply_state(st: Dictionary) -> void:
 ## Постсоветский декор: руины, столбы, трасса, ящики/бочки/покрышки у руин.
 func _scatter_decor(rng: RandomNumberGenerator, half: float) -> void:
 	# разбитая трасса — диагональ через карту, сегменты вровень с рельефом
-	for i in range(-6, 7):
-		var x := float(i) * 11.0
-		var z := float(i) * 4.0 - 25.0
+	for i in range(-9, 10):
+		var x := float(i) * 7.0
+		var z := float(i) * 2.55 - 25.0
 		var p := Vector2(x, z)
 		if _flat_enough(p):
 			_place_road_segment(p)
@@ -218,10 +218,14 @@ func _place_road_segment(p: Vector2) -> void:
 	var h_d := _terrain.height_at(p.x, p.y - 2.0)
 	var h_u := _terrain.height_at(p.x, p.y + 2.0)
 	var normal := Vector3(h_l - h_r, 4.0, h_d - h_u).normalized()
+	# слишком крутой участок вдоль дороги — пропускаем плиту (выбоина)
+	var d_dir := absf(_terrain.height_at(p.x + 4.0, p.y + 1.45) - _terrain.height_at(p.x - 4.0, p.y - 1.45))
+	if d_dir > 1.4:
+		return
 	var fwd := Vector3(1.0, 0.0, 4.0 / 11.0).normalized()
 	fwd = (fwd - normal * fwd.dot(normal)).normalized()
 	var r := RoadScene.instantiate() as Node3D
-	r.position = Vector3(p.x, h_center - 0.02, p.y)
+	r.position = Vector3(p.x, h_center - 0.04, p.y)
 	r.basis = Basis.looking_at(fwd, normal)
 	_track(r)
 	add_child(r)

@@ -87,13 +87,11 @@ transform = Transform3D(2.2, 0, 0, 0, 2.2, 0, 0, 0, 2.2, 0, -0.15, 0)
 
 [node name="Spear" parent="Head/Camera3D/HandTool/Model_spear" instance=ExtResource("6_spear")]
 transform = Transform3D(2.2, 0, 0, 0, 2.2, 0, 0, 0, 2.2, 0, -0.15, 0)
-visible = false
 
 [node name="Model_pickaxe" type="Node3D" parent="Head/Camera3D/HandTool"]
 
 [node name="Pickaxe" parent="Head/Camera3D/HandTool/Model_pickaxe" instance=ExtResource("7_pickaxe")]
 transform = Transform3D(2.2, 0, 0, 0, 2.2, 0, 0, 0, 2.2, 0, -0.15, 0)
-visible = false
 
 [node name="Inventory" type="Node" parent="."]
 script = ExtResource("3_inv")

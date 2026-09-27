@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/animal.gd" id="1_animal"]
 
@@ -17,6 +17,18 @@ size = Vector3(0.55, 0.55, 1.1)
 material = SubResource("body_mat")
 size = Vector3(0.4, 0.4, 0.45)
 
+[sub_resource type="BoxMesh" id="leg_mesh"]
+material = SubResource("body_mat")
+size = Vector3(0.14, 0.5, 0.14)
+
+[sub_resource type="BoxMesh" id="snout_mesh"]
+material = SubResource("body_mat")
+size = Vector3(0.18, 0.18, 0.22)
+
+[sub_resource type="BoxMesh" id="ear_mesh"]
+material = SubResource("body_mat")
+size = Vector3(0.1, 0.16, 0.05)
+
 [node name="Animal" type="CharacterBody3D"]
 collision_layer = 2
 collision_mask = 1
@@ -34,3 +46,31 @@ mesh = SubResource("body_mesh")
 [node name="Head" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -0.65)
 mesh = SubResource("head_mesh")
+
+[node name="Snout" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42, -0.95)
+mesh = SubResource("snout_mesh")
+
+[node name="LegFL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.28, -0.35)
+mesh = SubResource("leg_mesh")
+
+[node name="LegFR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0.28, -0.35)
+mesh = SubResource("leg_mesh")
+
+[node name="LegBL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.28, 0.5)
+mesh = SubResource("leg_mesh")
+
+[node name="LegBR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0.28, 0.5)
+mesh = SubResource("leg_mesh")
+
+[node name="EarL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.14, 0.74, -0.62)
+mesh = SubResource("ear_mesh")
+
+[node name="EarR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.74, -0.62)
+mesh = SubResource("ear_mesh")

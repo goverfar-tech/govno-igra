@@ -56,11 +56,11 @@ func _update_lights() -> void:
 
 	var sky_mat := world_env.environment.sky.sky_material as ProceduralSkyMaterial
 	if sky_mat:
-		sky_mat.sky_top_color = Color(0.02, 0.03, 0.09).lerp(Color(0.25, 0.5, 0.85), day_f)
-		sky_mat.sky_horizon_color = Color(0.05, 0.06, 0.12) \
-			.lerp(Color(0.75, 0.82, 0.92), day_f) \
-			.lerp(Color(1.0, 0.45, 0.2), dusk * day_f * 0.8)
-		sky_mat.ground_bottom_color = Color(0.01, 0.01, 0.02).lerp(Color(0.2, 0.18, 0.15), day_f)
-		sky_mat.ground_horizon_color = Color(0.05, 0.06, 0.12).lerp(Color(0.6, 0.6, 0.6), day_f)
+		sky_mat.sky_top_color = Color(0.02, 0.03, 0.09).lerp(Color(0.32, 0.45, 0.62), day_f)
+		sky_mat.sky_horizon_color = Color(0.05, 0.06, 0.12).lerp(Color(0.62, 0.66, 0.7), day_f).lerp(Color(1.0, 0.45, 0.2), dusk * day_f * 0.5)
+		sky_mat.ground_bottom_color = Color(0.01, 0.01, 0.02).lerp(Color(0.22, 0.2, 0.17), day_f)
+		sky_mat.ground_horizon_color = Color(0.05, 0.06, 0.12).lerp(Color(0.55, 0.55, 0.55), day_f)
 
-	world_env.environment.ambient_light_energy = lerpf(0.15, 1.0, day_f)
+	world_env.environment.ambient_light_energy = lerpf(0.2, 1.0, day_f)
+	var env := world_env.environment
+	env.fog_light_color = Color(0.03, 0.04, 0.07).lerp(Color(0.58, 0.62, 0.68), day_f).lerp(Color(0.9, 0.5, 0.25), dusk * day_f * 0.5)

@@ -16,6 +16,9 @@ const ITEM_DB := {
 	&"flask_empty": preload("res://resources/items/flask_empty.tres"),
 	&"axe": preload("res://resources/items/axe.tres"),
 	&"meat": preload("res://resources/items/meat.tres"),
+	&"cooked_meat": preload("res://resources/items/cooked_meat.tres"),
+	&"wall": preload("res://resources/items/wall.tres"),
+	&"campfire": preload("res://resources/items/campfire.tres"),
 }
 
 ## Слоты: {"item": ItemData | null, "count": int}

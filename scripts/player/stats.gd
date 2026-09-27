@@ -35,7 +35,7 @@ func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
 	var mult := SPRINT_MULT if _player and _player.is_sprinting_now() else 1.0
-	if _is_night:
+	if _is_night and not _near_fire():
 		mult *= NIGHT_MULT
 
 	hunger = maxf(0.0, hunger - HUNGER_PER_SEC * mult * delta)
@@ -67,6 +67,16 @@ func take_damage(amount: float) -> void:
 		is_dead = true
 		SignalHub.player_died.emit()
 	_emit()
+
+
+## Игрок в тепле костра (в радиусе WARM_RADIUS любого костра).
+func _near_fire() -> bool:
+	if _player == null:
+		return false
+	for c in get_tree().get_nodes_in_group("campfire"):
+		if c is Node3D and c.global_position.distance_to(_player.global_position) < 5.0:
+			return true
+	return false
 
 
 func _on_time_of_day_changed(time: float) -> void:

@@ -22,6 +22,32 @@ func consume_load_request() -> bool:
 	return r
 
 
+func _serialize_placed() -> Array:
+	var out: Array = []
+	for n in get_tree().get_nodes_in_group("placed"):
+		if is_instance_valid(n) and n is Node3D:
+			out.append({
+				"scene": n.scene_file_path,
+				"pos": [n.global_position.x, n.global_position.y, n.global_position.z],
+				"ry": n.rotation.y,
+			})
+	return out
+
+
+func _deserialize_placed(list: Array) -> void:
+	for n in get_tree().get_nodes_in_group("placed"):
+		n.queue_free()
+	for e in list:
+		var scene: PackedScene = load(e.get("scene", ""))
+		if scene == null:
+			continue
+		var n := scene.instantiate() as Node3D
+		get_tree().current_scene.add_child(n)
+		var pos: Array = e.get("pos", [0, 0, 0])
+		n.global_position = Vector3(pos[0], pos[1], pos[2])
+		n.rotation.y = e.get("ry", 0.0)
+
+
 func save_game() -> void:
 	var scene := get_tree().current_scene
 	if scene == null or scene.name != "Game":
@@ -45,6 +71,7 @@ func save_game() -> void:
 		},
 		"inventory": player.inventory.serialize(),
 		"world": world_gen.get_state(),
+		"placed": _serialize_placed(),
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -85,4 +112,5 @@ func apply_save() -> void:
 		player.inventory.deserialize(data.get("inventory", []))
 	if world_gen:
 		world_gen.apply_state(data.get("world", {}))
+	_deserialize_placed(data.get("placed", []))
 	SignalHub.notify.emit("Сохранение загружено")

@@ -17,3 +17,6 @@ extends Resource
 ## Инструмент/оружие (замах ЛКМ из хотбара) и урон по животным
 @export var is_tool := false
 @export var tool_damage := 0.0
+## Строительный предмет (ЛКМ ставит сцену в мир)
+@export var is_placeable := false
+@export var placeable_scene := ""

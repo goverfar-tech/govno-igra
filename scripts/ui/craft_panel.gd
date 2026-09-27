@@ -5,6 +5,8 @@ extends Control
 const RECIPES: Array = [
 	preload("res://resources/recipes/axe.tres"),
 	preload("res://resources/recipes/spear.tres"),
+	preload("res://resources/recipes/wall.tres"),
+	preload("res://resources/recipes/campfire.tres"),
 ]
 
 var _player: Player

@@ -167,6 +167,9 @@ func use_selected_item() -> void:
 	var item: ItemData = data.get("item")
 	if item == null:
 		return
+	if item.is_placeable:
+		_try_place(item)
+		return
 	if item.is_tool:
 		_swing_tool(item)
 		return
@@ -209,10 +212,42 @@ func _swing_tool(item: ItemData) -> void:
 					interact_ray.clear_target()
 
 
+func _try_place(item: ItemData) -> void:
+	## Установить постройку перед игроком (до 6 м, на поверхность).
+	if _swing_cooldown > 0.0:
+		return
+	if item.placeable_scene == "":
+		return
+	var from := camera.global_position
+	var to := from + (-camera.global_transform.basis.z) * 6.0
+	var q := PhysicsRayQueryParameters3D.create(from, to, 1, [self])
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		SignalHub.notify.emit("Сюда не поставить")
+		return
+	if not inventory.remove_item(item, 1):
+		return
+	_swing_cooldown = 0.4
+	var scene: PackedScene = load(item.placeable_scene)
+	var n := scene.instantiate() as Node3D
+	get_parent().add_child(n)
+	n.global_position = hit["position"]
+	n.rotation.y = rotation.y
+	AudioManager.play_hit(hit["position"])
+	SignalHub.notify.emit("Построено: %s" % item.display_name)
+
+
 func _update_hand_tool() -> void:
 	var data := inventory.get_selected_slot()
 	var item: ItemData = data.get("item")
 	hand_tool.visible = item != null and item.is_tool
+	if item != null and item.is_tool:
+		# окраска лезвия под предмет (копьё «деревянное», топор «каменный»)
+		var blade := hand_tool.get_node_or_null("Blade") as MeshInstance3D
+		if blade:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = item.icon_color
+			blade.material_override = mat
 
 
 ## Выбросить всю пачку из слота перед собой.

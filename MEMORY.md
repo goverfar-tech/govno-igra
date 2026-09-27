@@ -66,6 +66,7 @@ res://
     ├── world/animal.gd           — кабан: IDLE/WANDER/CHASE/ATTACK (class_name Animal)
     ├── world/world_gen.gd        — рассеивание объектов (class_name WorldGen)
     ├── autoload/audio_manager.gd — процедурные звуки: шаги/удары/подбор/еда/ветер
+    ├── autoload/save_system.gd   — сохранение/загрузка одного слота (JSON)
     ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,
     │                             inventory_changed, selection_changed,
     │                             inventory_open_changed, stats_changed,

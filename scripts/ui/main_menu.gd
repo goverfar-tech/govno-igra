@@ -5,8 +5,15 @@ extends Control
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	$Center/VBox/ContinueButton.visible = SaveSystem.has_save()
+	$Center/VBox/ContinueButton.pressed.connect(_on_continue_pressed)
 	$Center/VBox/PlayButton.pressed.connect(_on_play_pressed)
 	$Center/VBox/QuitButton.pressed.connect(_on_quit_pressed)
+
+
+func _on_continue_pressed() -> void:
+	SaveSystem.request_load()
+	get_tree().change_scene_to_file("res://scenes/main/game.tscn")
 
 
 func _on_play_pressed() -> void:

@@ -7,6 +7,17 @@ signal changed
 
 const SLOT_COUNT := 20
 
+## Реестр предметов по id (для сохранения)
+const ITEM_DB := {
+	&"stone": preload("res://resources/items/stone.tres"),
+	&"wood": preload("res://resources/items/wood.tres"),
+	&"berry": preload("res://resources/items/berry.tres"),
+	&"flask": preload("res://resources/items/flask.tres"),
+	&"flask_empty": preload("res://resources/items/flask_empty.tres"),
+	&"axe": preload("res://resources/items/axe.tres"),
+	&"meat": preload("res://resources/items/meat.tres"),
+}
+
 ## Слоты: {"item": ItemData | null, "count": int}
 var slots: Array[Dictionary] = []
 
@@ -45,6 +56,26 @@ func cycle_slot(dir: int) -> void:
 ## Содержимое активного слота хотбара.
 func get_selected_slot() -> Dictionary:
 	return slots[selected_slot]
+
+
+## Сериализация для сохранения: [{id, count}, ...]
+func serialize() -> Array:
+	var out: Array = []
+	for slot in slots:
+		if slot["item"] != null and slot["count"] > 0:
+			out.append({"id": slot["item"].id, "count": slot["count"]})
+	return out
+
+
+func deserialize(data: Array) -> void:
+	for slot in slots:
+		slot["item"] = null
+		slot["count"] = 0
+	for e in data:
+		var item: ItemData = ITEM_DB.get(StringName(e.get("id", "")))
+		if item:
+			add_item(item, int(e.get("count", 1)))
+	changed.emit()
 
 
 ## Забирает всю пачку из слота (для выбрасывания). Возвращает {"item","count"}.

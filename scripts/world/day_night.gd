@@ -17,6 +17,7 @@ var _night_notified := false
 
 
 func _ready() -> void:
+	add_to_group("daynight")
 	time = start_time
 	_update_lights()
 

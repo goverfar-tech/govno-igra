@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 SignalHub="*res://scripts/autoload/signal_hub.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
+SaveSystem="*res://scripts/autoload/save_system.gd"
 
 [display]
 

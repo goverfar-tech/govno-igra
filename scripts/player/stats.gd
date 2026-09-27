@@ -73,6 +73,14 @@ func _on_time_of_day_changed(time: float) -> void:
 	_is_night = time < 0.25 or time > 0.75
 
 
+## Установить все статы разом (загрузка сохранения).
+func set_all(h: float, hu: float, th: float) -> void:
+	health = clampf(h, 0.0, MAX_VALUE)
+	hunger = clampf(hu, 0.0, MAX_VALUE)
+	thirst = clampf(th, 0.0, MAX_VALUE)
+	_emit()
+
+
 ## Съесть/выпить предмет: восстанавливает сытость и жажду.
 func apply_food(nutrition: float, hydration: float) -> void:
 	hunger = minf(MAX_VALUE, hunger + nutrition)

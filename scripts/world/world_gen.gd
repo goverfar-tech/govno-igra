@@ -27,6 +27,11 @@ const Axe: ItemData = preload("res://resources/items/axe.tres")
 var _terrain: Terrain
 var _occupied: Array[Vector2] = []
 
+# Для сохранений: сгенерированным объектам присваиваем стабильные имена
+var _spawned_nodes: Array[Node] = []
+var _spawned_names: Array[String] = []
+var _spawn_counter := 0
+
 
 func _ready() -> void:
 	_terrain = get_parent().get_node_or_null("Terrain") as Terrain
@@ -76,6 +81,7 @@ func _place(scene: PackedScene, p: Vector2, yaw := 0.0) -> Node3D:
 	n.position = Vector3(p.x, _terrain.height_at(p.x, p.y), p.y)
 	n.rotation.y = yaw
 	_occupied.append(p)
+	_track(n)
 	add_child(n)
 	return n
 
@@ -124,6 +130,41 @@ func _scatter_in_area(rng: RandomNumberGenerator, scene: PackedScene,
 			placed += 1
 
 
+func _track(n: Node3D) -> void:
+	var nm := "gen_%d" % _spawn_counter
+	_spawn_counter += 1
+	n.name = nm
+	_spawned_nodes.append(n)
+	_spawned_names.append(nm)
+
+
+## Состояние мира для сохранения: что вырублено/собрано/убито/поднято.
+func get_state() -> Dictionary:
+	var st := {}
+	for i in _spawned_names.size():
+		var nm: String = _spawned_names[i]
+		var n := _spawned_nodes[i]
+		if not is_instance_valid(n):
+			st[nm] = {"alive": false}
+		elif n is BerryBush and not n._ready_to_pick:
+			st[nm] = {"alive": true, "picked": true}
+	return st
+
+
+func apply_state(st: Dictionary) -> void:
+	for i in _spawned_names.size():
+		var nm: String = _spawned_names[i]
+		if not st.has(nm):
+			continue
+		var n := _spawned_nodes[i]
+		var entry: Dictionary = st[nm]
+		if not entry.get("alive", true):
+			if is_instance_valid(n):
+				n.queue_free()
+		elif n is BerryBush and entry.get("picked", false) and n._ready_to_pick:
+			n._set_ready(false)
+
+
 func _place_pickup(item: ItemData, p: Vector2, count := 1) -> void:
 	# предмет задаём ДО добавления в дерево — чтобы подхватился цвет в _ready
 	var n := PickupScene.instantiate() as PickupItem
@@ -131,4 +172,5 @@ func _place_pickup(item: ItemData, p: Vector2, count := 1) -> void:
 	n.count = count
 	n.position = Vector3(p.x, _terrain.height_at(p.x, p.y) + 0.25, p.y)
 	_occupied.append(p)
+	_track(n)
 	add_child(n)

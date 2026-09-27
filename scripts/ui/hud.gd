@@ -12,7 +12,6 @@ const TOAST_TIME := 2.0
 @onready var bar_hunger: ProgressBar = %BarHunger
 @onready var bar_thirst: ProgressBar = %BarThirst
 @onready var damage_flash: ColorRect = %DamageFlash
-@onready var damage_flash: ColorRect = %DamageFlash
 
 var _toast_timer := 0.0
 

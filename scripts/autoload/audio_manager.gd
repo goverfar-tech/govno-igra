@@ -48,7 +48,7 @@ func play_swing() -> void:
 
 
 ## Хрюканье/фырканье кабана (позиционное).
-func play_grunt(pos: Vector3, volume_db := -3.0) -> void:
+func play_grunt(pos: Vector3, volume_db := -6.0) -> void:
 	_play_3d(_grunt_stream, pos, volume_db)
 
 

@@ -125,7 +125,7 @@ func _update_footsteps(delta: float, input_dir: Vector2) -> void:
 		_step_accum += Vector2(velocity.x, velocity.z).length() * delta
 		if _step_accum >= 1.9:
 			_step_accum = 0.0
-			var vol := -10.0 if is_crouching else (-5.0 if is_sprinting_now() else -7.0)
+			var vol := -18.0 if is_crouching else (-12.0 if is_sprinting_now() else -15.0)
 			AudioManager.play_step(vol)
 	else:
 		_step_accum = 0.0

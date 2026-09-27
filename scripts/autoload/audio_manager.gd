@@ -24,15 +24,15 @@ func play_step(volume_db: float) -> void:
 
 
 func play_hit(pos: Vector3) -> void:
-	_play_3d(_hit_stream, pos, -6.0)
+	_play_3d(_hit_stream, pos, -14.0)
 
 
 func play_pickup() -> void:
-	_play_flat(_pickup_stream, -4.0)
+	_play_flat(_pickup_stream, -12.0)
 
 
 func play_eat() -> void:
-	_play_flat(_eat_stream, -5.0)
+	_play_flat(_eat_stream, -13.0)
 
 
 # ---------- генерация ----------
@@ -57,7 +57,7 @@ func _make_step() -> AudioStreamWAV:
 		var env := exp(-30.0 * i / n)
 		var white := rng.randf_range(-1.0, 1.0)
 		prev = prev * 0.7 + white * 0.3
-		data[i] = int(clampf(prev * env * 0.9, -1.0, 1.0) * 127.0 + 128.0)
+		data[i] = int(clampf(prev * env * 0.45, -1.0, 1.0) * 127.0 + 128.0)
 	return _make_wav(data)
 
 
@@ -76,7 +76,7 @@ func _make_hit() -> AudioStreamWAV:
 		phase += freq * TAU / SAMPLE_RATE
 		var tone := sin(phase) * 0.8
 		var noise := rng.randf_range(-1.0, 1.0) * 0.25
-		data[i] = int(clampf((tone + noise) * env, -1.0, 1.0) * 127.0 + 128.0)
+		data[i] = int(clampf((tone + noise) * env * 0.5, -1.0, 1.0) * 127.0 + 128.0)
 	return _make_wav(data)
 
 
@@ -91,7 +91,7 @@ func _make_blip(f_from: float, f_to: float, dur: float) -> AudioStreamWAV:
 		var env := exp(-5.0 * t)
 		var freq := lerpf(f_from, f_to, t)
 		phase += freq * TAU / SAMPLE_RATE
-		data[i] = int(clampf(sin(phase) * env * 0.6, -1.0, 1.0) * 127.0 + 128.0)
+		data[i] = int(clampf(sin(phase) * env * 0.3, -1.0, 1.0) * 127.0 + 128.0)
 	return _make_wav(data)
 
 
@@ -108,7 +108,7 @@ func _make_wind() -> AudioStreamWAV:
 	for i in n:
 		var t := float(i) / SAMPLE_RATE
 		lfo_phase += 0.35 * TAU / SAMPLE_RATE
-		var amp := 0.35 + 0.3 * sin(lfo_phase + 0.5 * sin(t * 0.6))
+		var amp := 0.2 + 0.15 * sin(lfo_phase + 0.5 * sin(t * 0.6))
 		var white := rng.randf_range(-1.0, 1.0)
 		prev = prev * 0.92 + white * 0.08  # сильный ФНЧ = гул
 		data[i] = int(clampf(prev * amp, -1.0, 1.0) * 127.0 + 128.0)
@@ -154,6 +154,6 @@ func _play_3d(stream: AudioStreamWAV, pos: Vector3, volume_db: float) -> void:
 func _play_ambient(stream: AudioStreamWAV) -> void:
 	var p := AudioStreamPlayer.new()
 	p.stream = stream
-	p.volume_db = -24.0
+	p.volume_db = -34.0
 	add_child(p)
 	p.play()

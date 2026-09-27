@@ -199,7 +199,12 @@ func _swing_tool(item: ItemData) -> void:
 			c.take_damage(item.tool_damage, global_position)
 			AudioManager.play_hit(c.global_position)
 		elif c is ResourceNode:
-			c.harvest(2, self)
+			if not c.tool_allowed:
+				SignalHub.notify.emit("Этот ресурс топором не добыть")
+			else:
+				c.harvest(2, self)
+				if c.is_queued_for_deletion():
+					interact_ray.clear_target()
 
 
 func _update_hand_tool() -> void:

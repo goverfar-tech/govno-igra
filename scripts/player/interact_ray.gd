@@ -14,10 +14,10 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	# Подобранный/удалённый объект — забываем и прячем подсказку
-	if _current and not is_instance_valid(_current):
+	# Подобранный/удалённый объект — забываем и прячем подсказку.
+	# is_instance_valid безопасен и для null, и для освобождённых ссылок.
+	if not is_instance_valid(_current):
 		_current = null
-		SignalHub.prompt_changed.emit("")
 
 	var target := _get_interactable()
 	if target != _current:
@@ -30,6 +30,13 @@ func _physics_process(_delta: float) -> void:
 		SignalHub.prompt_changed.emit("")
 		target_obj.interact(owner as Player)
 		force_raycast_update()
+
+
+## Сбросить текущую цель и подсказку (вызывается уничтожением извне,
+## например замахом инструмента, который ломает источник).
+func clear_target() -> void:
+	_current = null
+	SignalHub.prompt_changed.emit("")
 
 
 func _get_interactable() -> Interactable:

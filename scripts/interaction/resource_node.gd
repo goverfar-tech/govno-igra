@@ -5,6 +5,8 @@ extends Interactable
 
 @export var item: ItemData
 @export var hits_required: int = 3
+## Разрешает ли источник добычу инструментом (топор — дереву, не камню)
+@export var tool_allowed := true
 @export var yield_per_hit: int = 1
 
 var _hits_done := 0

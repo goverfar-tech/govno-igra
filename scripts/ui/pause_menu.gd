@@ -7,7 +7,14 @@ extends Control
 func _ready() -> void:
 	visible = false
 	$Center/VBox/ResumeButton.pressed.connect(close)
+	$Center/VBox/MenuButton.pressed.connect(_on_menu_pressed)
 	$Center/VBox/QuitButton.pressed.connect(func() -> void: get_tree().quit())
+
+
+func _on_menu_pressed() -> void:
+	visible = false
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/ui/main_menu.tscn")
 
 
 func _unhandled_input(event: InputEvent) -> void:

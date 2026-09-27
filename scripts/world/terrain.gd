@@ -77,12 +77,12 @@ func _vertex_pos(x: int, z: int) -> Vector3:
 func _color_for_height(h: float) -> Color:
 	# трава -> камень -> светлые вершины
 	if h < 0.6:
-		return Color(0.24, 0.4, 0.22)            # низина/дно озера
+		return Color(0.22, 0.3, 0.2)            # низина/дно озера
 	if h < 2.5:
-		return Color(0.32, 0.5, 0.27)            # трава
+		return Color(0.3, 0.42, 0.26)            # трава
 	elif h < 5.5:
-		return Color(0.5, 0.46, 0.4)             # каменистый склон
-	return Color(0.8, 0.82, 0.85)               # вершины
+		return Color(0.45, 0.42, 0.38)            # каменистый склон
+	return Color(0.62, 0.62, 0.66)              # вершины
 
 
 func _build_mesh() -> void:

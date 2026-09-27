@@ -23,7 +23,6 @@ func _ready() -> void:
 	SignalHub.notify.connect(_on_notify)
 	SignalHub.stats_changed.connect(_on_stats_changed)
 	SignalHub.player_damaged.connect(_on_player_damaged)
-	SignalHub.player_damaged.connect(_on_player_damaged)
 
 
 func _process(delta: float) -> void:

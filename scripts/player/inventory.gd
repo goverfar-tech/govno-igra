@@ -81,6 +81,16 @@ func deserialize(data: Array) -> void:
 	changed.emit()
 
 
+## Меняет местами содержимое двух слотов (перетаскивание в панели).
+func swap_slots(a: int, b: int) -> void:
+	if a < 0 or b < 0 or a >= slots.size() or b >= slots.size() or a == b:
+		return
+	var tmp: Dictionary = slots[a]
+	slots[a] = slots[b]
+	slots[b] = tmp
+	changed.emit()
+
+
 ## Забирает всю пачку из слота (для выбрасывания). Возвращает {"item","count"}.
 func take_all(index: int) -> Dictionary:
 	if index < 0 or index >= slots.size():

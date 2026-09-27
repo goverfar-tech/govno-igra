@@ -27,7 +27,7 @@ mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="Title" type="Label" parent="Center/Panel/VBox"]
-text = "Инвентарь (Tab — закрыть, ПКМ — выбросить)"
+text = "Инвентарь (Tab — закрыть · ЛКМ взять/положить · ПКМ выбросить)"
 horizontal_alignment = 1
 
 [node name="Grid" type="GridContainer" parent="Center/Panel/VBox"]

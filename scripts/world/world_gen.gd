@@ -175,14 +175,13 @@ func apply_state(st: Dictionary) -> void:
 
 ## Постсоветский декор: руины, столбы, трасса, ящики/бочки/покрышки у руин.
 func _scatter_decor(rng: RandomNumberGenerator, half: float) -> void:
-	# разбитая трасса — диагональ через карту, сегменты с шагом ~11 м
+	# разбитая трасса — диагональ через карту, сегменты вровень с рельефом
 	for i in range(-6, 7):
 		var x := float(i) * 11.0
 		var z := float(i) * 4.0 - 25.0
 		var p := Vector2(x, z)
 		if _flat_enough(p):
-			var r := _place(RoadScene, p, 0.35)
-			r.position.y += 0.06
+			_place_road_segment(p)
 
 	# руины и их окружение
 	var ruin_points: Array[Vector2] = []
@@ -209,6 +208,23 @@ func _scatter_decor(rng: RandomNumberGenerator, half: float) -> void:
 		var p := Vector2(lerpf(-half, half, float(i) / maxi(1, poles_count - 1)), 55.0 + rng.randf_range(-6.0, 6.0))
 		if _flat_enough(p):
 			_place(PoleScene, p, rng.randf() * 0.15)
+
+
+## Сегмент дороги, выровненный по наклону рельефа.
+func _place_road_segment(p: Vector2) -> void:
+	var h_center := _terrain.height_at(p.x, p.y)
+	var h_l := _terrain.height_at(p.x - 2.0, p.y)
+	var h_r := _terrain.height_at(p.x + 2.0, p.y)
+	var h_d := _terrain.height_at(p.x, p.y - 2.0)
+	var h_u := _terrain.height_at(p.x, p.y + 2.0)
+	var normal := Vector3(h_l - h_r, 4.0, h_d - h_u).normalized()
+	var fwd := Vector3(1.0, 0.0, 4.0 / 11.0).normalized()
+	fwd = (fwd - normal * fwd.dot(normal)).normalized()
+	var r := RoadScene.instantiate() as Node3D
+	r.position = Vector3(p.x, h_center - 0.02, p.y)
+	r.basis = Basis.looking_at(fwd, normal)
+	_track(r)
+	add_child(r)
 
 
 func _place_pickup(item: ItemData, p: Vector2, count := 1) -> void:

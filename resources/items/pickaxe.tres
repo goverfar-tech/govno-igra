@@ -9,4 +9,4 @@ display_name = "Кирка"
 icon_color = Color(0.55, 0.55, 0.6, 1)
 max_stack = 1
 is_tool = true
-tool_damage = 8.0
+tool_damage = 5.0

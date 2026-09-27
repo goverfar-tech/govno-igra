@@ -8,6 +8,7 @@ func _ready() -> void:
 	$Center/VBox/ContinueButton.visible = SaveSystem.has_save()
 	$Center/VBox/ContinueButton.pressed.connect(_on_continue_pressed)
 	$Center/VBox/PlayButton.pressed.connect(_on_play_pressed)
+	$Center/VBox/SettingsButton.pressed.connect(func() -> void: $SettingsPanel.open())
 	$Center/VBox/QuitButton.pressed.connect(_on_quit_pressed)
 
 

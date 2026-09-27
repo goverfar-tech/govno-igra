@@ -1,4 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/ui/settings_panel.tscn" id="2_settings"]
 
 [ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_script"]
 
@@ -48,8 +50,16 @@ size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Начать игру"
 
+[node name="SettingsButton" type="Button" parent="Center/VBox"]
+custom_minimum_size = Vector2(240, 44)
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Настройки"
+
 [node name="QuitButton" type="Button" parent="Center/VBox"]
 custom_minimum_size = Vector2(240, 44)
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
 text = "Выход"
+
+[node name="SettingsPanel" parent="." instance=ExtResource("2_settings")]

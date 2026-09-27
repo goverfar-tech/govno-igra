@@ -9,6 +9,7 @@ func _ready() -> void:
 	$Center/VBox/ResumeButton.pressed.connect(close)
 	$Center/VBox/SaveButton.pressed.connect(func() -> void: SaveSystem.save_game())
 	$Center/VBox/MenuButton.pressed.connect(_on_menu_pressed)
+	$Center/VBox/SettingsButton.pressed.connect(func() -> void: $SettingsPanel.open())
 	$Center/VBox/QuitButton.pressed.connect(func() -> void: get_tree().quit())
 
 
@@ -21,7 +22,9 @@ func _on_menu_pressed() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		if visible:
+		if $SettingsPanel.visible:
+			$SettingsPanel.close()
+		elif visible:
 			close()
 		else:
 			open()

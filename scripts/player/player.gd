@@ -42,6 +42,9 @@ var _hand_rest_x := 0.0
 func _ready() -> void:
 	add_to_group("player")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_apply_settings()
+	if not Settings.is_connected("changed", Callable(self, "_apply_settings")):
+		Settings.changed.connect(_apply_settings)
 	SignalHub.inventory_open_changed.connect(_on_inventory_open_changed)
 	SignalHub.selection_changed.connect(func(_i: int) -> void: _update_hand_tool())
 	SignalHub.inventory_changed.connect(func(_s: Array) -> void: _update_hand_tool())
@@ -162,6 +165,11 @@ func is_sprinting_now() -> bool:
 
 
 ## Использовать предмет из активного слота хотбара (ЛКМ).
+func _apply_settings() -> void:
+	mouse_sensitivity = Settings.mouse_sensitivity
+	camera.fov = Settings.fov
+
+
 func use_selected_item() -> void:
 	var data := inventory.get_selected_slot()
 	var item: ItemData = data.get("item")

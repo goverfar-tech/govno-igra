@@ -1,0 +1,66 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="1_script"]
+
+[node name="SettingsPanel" type="Control"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_script")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.6)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(380, 0)
+
+[node name="VBox" type="VBoxContainer" parent="Center/Panel"]
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Center/Panel/VBox"]
+theme_override_font_sizes/font_size = 18
+text = "Настройки"
+horizontal_alignment = 1
+
+[node name="VolumeRow" type="VBoxContainer" parent="Center/Panel/VBox"]
+
+[node name="Label" type="Label" parent="Center/Panel/VBox/VolumeRow"]
+mouse_filter = 2
+text = "Громкость"
+
+[node name="VolumeSlider" type="HSlider" parent="Center/Panel/VBox/VolumeRow"]
+unique_name_in_owner = true
+
+[node name="SensRow" type="VBoxContainer" parent="Center/Panel/VBox"]
+
+[node name="Label" type="Label" parent="Center/Panel/VBox/SensRow"]
+mouse_filter = 2
+text = "Чувствительность мыши"
+
+[node name="SensSlider" type="HSlider" parent="Center/Panel/VBox/SensRow"]
+unique_name_in_owner = true
+
+[node name="FovRow" type="VBoxContainer" parent="Center/Panel/VBox"]
+
+[node name="Label" type="Label" parent="Center/Panel/VBox/FovRow"]
+mouse_filter = 2
+text = "Поле зрения (FOV)"
+
+[node name="FovSlider" type="HSlider" parent="Center/Panel/VBox/FovRow"]
+unique_name_in_owner = true
+
+[node name="BackButton" type="Button" parent="Center/Panel/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 36)
+size_flags_horizontal = 4
+text = "Назад"

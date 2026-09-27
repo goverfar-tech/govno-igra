@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 
@@ -7,6 +7,12 @@
 [ext_resource type="Script" path="res://scripts/player/inventory.gd" id="3_inv"]
 
 [ext_resource type="Script" path="res://scripts/player/stats.gd" id="4_stats"]
+
+[ext_resource type="PackedScene" path="res://assets/models/tool-axe.glb" id="5_axe"]
+
+[ext_resource type="PackedScene" path="res://assets/models/tool-hoe.glb" id="6_spear"]
+
+[ext_resource type="PackedScene" path="res://assets/models/tool-pickaxe.glb" id="7_pickaxe"]
 
 [sub_resource type="CapsuleShape3D" id="player_capsule"]
 radius = 0.4
@@ -74,32 +80,20 @@ transform = Transform3D(1, 0, 0, 0, 0.94, -0.34, 0, 0.34, 0.94, 0.35, -0.3, -0.5
 
 [node name="Model_axe" type="Node3D" parent="Head/Camera3D/HandTool"]
 
-[node name="Handle" type="MeshInstance3D" parent="Head/Camera3D/HandTool/Model_axe"]
-mesh = SubResource("handle_mesh")
-
-[node name="Blade" type="MeshInstance3D" parent="Head/Camera3D/HandTool/Model_axe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -0.05)
-mesh = SubResource("blade_mesh")
+[node name="Axe" parent="Head/Camera3D/HandTool/Model_axe" instance=ExtResource("5_axe")]
+transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -0.1, 0)
 
 [node name="Model_spear" type="Node3D" parent="Head/Camera3D/HandTool"]
+
+[node name="Spear" parent="Head/Camera3D/HandTool/Model_spear" instance=ExtResource("6_spear")]
+transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -0.1, 0)
 visible = false
-
-[node name="Shaft" type="MeshInstance3D" parent="Head/Camera3D/HandTool/Model_spear"]
-mesh = SubResource("shaft_mesh")
-
-[node name="Tip" type="MeshInstance3D" parent="Head/Camera3D/HandTool/Model_spear"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
-mesh = SubResource("tip_mesh")
 
 [node name="Model_pickaxe" type="Node3D" parent="Head/Camera3D/HandTool"]
+
+[node name="Pickaxe" parent="Head/Camera3D/HandTool/Model_pickaxe" instance=ExtResource("7_pickaxe")]
+transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -0.1, 0)
 visible = false
-
-[node name="Handle" type="MeshInstance3D" parent="Head/Camera3D/HandTool/Model_pickaxe"]
-mesh = SubResource("handle_mesh")
-
-[node name="Pick" type="MeshInstance3D" parent="Head/Camera3D/HandTool/Model_pickaxe"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
-mesh = SubResource("pick_mesh")
 
 [node name="Inventory" type="Node" parent="."]
 script = ExtResource("3_inv")

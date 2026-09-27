@@ -1,14 +1,11 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
-[sub_resource type="StandardMaterial3D" id="crate_mat"]
-albedo_color = Color(0.5, 0.38, 0.2, 1)
+[ext_resource type="PackedScene" path="res://assets/models/box.glb" id="1_model"]
 
 [sub_resource type="BoxShape3D" id="col"]
 size = Vector3(0.8, 0.8, 0.8)
 
-[sub_resource type="BoxMesh" id="mesh"]
-material = SubResource("crate_mat")
-size = Vector3(0.8, 0.8, 0.8)
+
 
 [node name="Crate" type="StaticBody3D"]
 
@@ -16,6 +13,5 @@ size = Vector3(0.8, 0.8, 0.8)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 shape = SubResource("col")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
-mesh = SubResource("mesh")
+[node name="Model" parent="." instance=ExtResource("1_model")]
+transform = Transform3D(0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, 0, 0, 0)

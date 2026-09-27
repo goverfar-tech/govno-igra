@@ -7,11 +7,20 @@ extends Interactable
 
 
 func _ready() -> void:
-	# Цвет-заглушка вместо модели: из icon_color предмета
-	if item:
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = item.icon_color
-		$MeshInstance3D.set_surface_override_material(0, mat)
+	if item == null:
+		return
+	if item.world_model != "":
+		var packed := load(item.world_model) as PackedScene
+		if packed:
+			var m := packed.instantiate()
+			m.scale = Vector3.ONE * 0.4
+			add_child(m)
+			$MeshInstance3D.visible = false
+			return
+	# fallback: цветной кубик
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = item.icon_color
+	$MeshInstance3D.set_surface_override_material(0, mat)
 
 
 func get_prompt() -> String:

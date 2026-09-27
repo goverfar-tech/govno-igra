@@ -10,3 +10,4 @@ icon_color = Color(0.55, 0.42, 0.25, 1)
 max_stack = 1
 is_tool = true
 tool_damage = 8.0
+world_model = "res://assets/models/tool-axe.glb"

@@ -15,6 +15,9 @@ const CrateScene: PackedScene = preload("res://scenes/buildings/crate.tscn")
 const BarrelScene: PackedScene = preload("res://scenes/buildings/barrel.tscn")
 const TireScene: PackedScene = preload("res://scenes/buildings/tire.tscn")
 const RoadScene: PackedScene = preload("res://scenes/buildings/road_strip.tscn")
+const GrassScene: PackedScene = preload("res://assets/models/patch-grass.glb")
+const GrassLargeScene: PackedScene = preload("res://assets/models/patch-grass-large.glb")
+const GrassSmallScene: PackedScene = preload("res://assets/models/grass.glb")
 
 const Stone: ItemData = preload("res://resources/items/stone.tres")
 const Berry: ItemData = preload("res://resources/items/berry.tres")
@@ -105,6 +108,7 @@ func _scatter() -> void:
 	_scatter_in_area(rng, BushScene, half, bushes_count, 4.0)
 	_scatter_in_area(rng, AnimalScene, half * 0.7, animals_count, 20.0)
 	_scatter_decor(rng, half)
+	_scatter_grass(rng, half)
 
 	# подборы рядом со спауном: полная фляга, камень, ягоды
 	_place_pickup(Flask, Vector2(2.5, 1.5))
@@ -208,6 +212,20 @@ func _scatter_decor(rng: RandomNumberGenerator, half: float) -> void:
 		var p := Vector2(lerpf(-half, half, float(i) / maxi(1, poles_count - 1)), 55.0 + rng.randf_range(-6.0, 6.0))
 		if _flat_enough(p):
 			_place(PoleScene, p, rng.randf() * 0.15)
+
+
+## Трава-пятна для объёма мира (без коллизий).
+func _scatter_grass(rng: RandomNumberGenerator, half: float) -> void:
+	for i in 140:
+		var p := Vector2(rng.randf_range(-half, half), rng.randf_range(-half, half))
+		if _min_dist_ok(p, 0.5) and _flat_enough(p):
+			var sc: PackedScene = [GrassScene, GrassLargeScene, GrassSmallScene][rng.randi() % 3]
+			var g := sc.instantiate() as Node3D
+			g.position = Vector3(p.x, _terrain.height_at(p.x, p.y), p.y)
+			g.rotation.y = rng.randf() * TAU
+			var sc_factor := rng.randf_range(0.8, 1.4)
+			g.scale = Vector3.ONE * sc_factor
+			add_child(g)
 
 
 ## Сегмент дороги, выровненный по наклону рельефа.

@@ -8,3 +8,4 @@ id = &"flask_empty"
 display_name = "Фляга (пустая)"
 icon_color = Color(0.2, 0.3, 0.45, 1)
 max_stack = 1
+world_model = "res://assets/models/bottle.glb"

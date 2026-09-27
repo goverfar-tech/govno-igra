@@ -8,3 +8,4 @@ id = &"stone"
 display_name = "Камень"
 icon_color = Color(0.6, 0.6, 0.65, 1)
 max_stack = 30
+world_model = "res://assets/models/resource-stone.glb"

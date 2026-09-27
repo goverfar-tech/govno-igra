@@ -20,3 +20,5 @@ extends Resource
 ## Строительный предмет (ЛКМ ставит сцену в мир)
 @export var is_placeable := false
 @export var placeable_scene := ""
+## GLB-модель предмета на земле (пусто = цветной кубик)
+@export var world_model := ""

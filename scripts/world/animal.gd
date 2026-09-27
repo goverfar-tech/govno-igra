@@ -35,7 +35,6 @@ func _ready() -> void:
 	_gravity = ProjectSettings.get_setting("physics/3d/default_gravity")
 	_home = global_position
 	add_to_group("animals")
-	_player = get_tree().get_first_node_in_group("player")
 
 
 func take_damage(amount: float, _from_position := Vector3.ZERO) -> void:
@@ -65,6 +64,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _player_dist() -> float:
+	# игрок может появиться позже животного (порядок _ready), ищем лениво
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group("player")
 	if _player == null:
 		return INF
 	return Vector3(global_position.x, 0, global_position.z) \

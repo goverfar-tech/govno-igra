@@ -14,3 +14,6 @@ extends Resource
 @export var hydration := 0.0
 ## Что остаётся в инвентаре после использования (полная фляга -> пустая)
 @export var consume_returns: ItemData
+## Инструмент/оружие (замах ЛКМ из хотбара) и урон по животным
+@export var is_tool := false
+@export var tool_damage := 0.0

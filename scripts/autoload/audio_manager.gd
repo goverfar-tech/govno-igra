@@ -12,6 +12,7 @@ var _pickup_stream: AudioStreamWAV
 var _eat_stream: AudioStreamWAV
 var _grunt_stream: AudioStreamWAV
 var _squeal_stream: AudioStreamWAV
+var _whoosh_stream: AudioStreamWAV
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func _ready() -> void:
 	_eat_stream = _make_blip(440.0, 260.0, 0.25)
 	_grunt_stream = _make_grunt()
 	_squeal_stream = _make_blip(600.0, 1300.0, 0.18)
+	_whoosh_stream = _make_whoosh()
 	_play_ambient(_make_wind())
 
 
@@ -38,6 +40,11 @@ func play_pickup() -> void:
 
 func play_eat() -> void:
 	_play_flat(_eat_stream, -15.0)
+
+
+## Взмах инструментом (воздух).
+func play_swing() -> void:
+	_play_flat(_whoosh_stream, -16.0)
 
 
 ## Хрюканье/фырканье кабана (позиционное).
@@ -164,6 +171,24 @@ func _make_grunt() -> AudioStreamWAV:
 		var tone := sin(phase) * 0.5 + sin(phase * 2.0) * 0.2
 		var noise := rng.randf_range(-1.0, 1.0) * 0.25
 		f[i] = (tone + noise) * env * 0.45
+	return _make_wav(f)
+
+
+## Свист взмаха: короткий падающий шум.
+func _make_whoosh() -> AudioStreamWAV:
+	var dur := 0.14
+	var n := int(SAMPLE_RATE * dur)
+	var f := PackedFloat32Array()
+	f.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var prev := 0.0
+	for i in n:
+		var t := float(i) / n
+		var env := sin(t * PI)
+		var white := rng.randf_range(-1.0, 1.0)
+		prev = prev * 0.6 + white * 0.4
+		f[i] = prev * env * 0.3
 	return _make_wav(f)
 
 

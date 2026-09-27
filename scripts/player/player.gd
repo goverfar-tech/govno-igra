@@ -25,6 +25,8 @@ const PickupItemScene: PackedScene = preload("res://scenes/interaction/pickup_it
 @onready var head_clearance: ShapeCast3D = $HeadClearance
 @onready var inventory: Inventory = $Inventory
 @onready var stats: Stats = $Stats
+@onready var interact_ray: InteractRay = $Head/Camera3D/InteractRay
+@onready var hand_tool: Node3D = $Head/Camera3D/HandTool
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var is_crouching := false
@@ -33,12 +35,17 @@ var panel_open := false
 var _pitch := 0.0
 var _bob_timer := 0.0
 var _step_accum := 0.0
+var _swing_cooldown := 0.0
 
 
 func _ready() -> void:
 	add_to_group("player")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	SignalHub.inventory_open_changed.connect(_on_inventory_open_changed)
+	SignalHub.selection_changed.connect(func(_i: int) -> void: _update_hand_tool())
+	SignalHub.inventory_changed.connect(func(_s: Array) -> void: _update_hand_tool())
+	hand_tool.visible = false
+	call_deferred("_update_hand_tool")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -71,6 +78,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _swing_cooldown > 0.0:
+		_swing_cooldown -= delta
 	_update_crouch_state()
 
 	if not is_on_floor():
@@ -156,6 +165,9 @@ func use_selected_item() -> void:
 	var item: ItemData = data.get("item")
 	if item == null:
 		return
+	if item.is_tool:
+		_swing_tool(item)
+		return
 	if item.is_edible or item.nutrition > 0.0 or item.hydration > 0.0:
 		if inventory.remove_item(item, 1):
 			stats.apply_food(item.nutrition, item.hydration)
@@ -166,6 +178,34 @@ func use_selected_item() -> void:
 				inventory.add_item(item.consume_returns, 1)
 	else:
 		SignalHub.notify.emit("Это нельзя съесть")
+
+
+## Замах инструментом: рубит источники (удар как 2), ранит животных.
+func _swing_tool(item: ItemData) -> void:
+	if _swing_cooldown > 0.0:
+		return
+	_swing_cooldown = 0.6
+	var tween := create_tween()
+	tween.tween_property(hand_tool, "rotation:x", -1.2, 0.12)
+	tween.tween_property(hand_tool, "rotation:x", 0.0, 0.25)
+	AudioManager.play_swing()
+	await get_tree().create_timer(0.12).timeout
+	if not is_instance_valid(interact_ray):
+		return
+	interact_ray.force_raycast_update()
+	if interact_ray.is_colliding():
+		var c := interact_ray.get_collider()
+		if c is Animal:
+			c.take_damage(item.tool_damage, global_position)
+			AudioManager.play_hit(c.global_position)
+		elif c is ResourceNode:
+			c.harvest(2, self)
+
+
+func _update_hand_tool() -> void:
+	var data := inventory.get_selected_slot()
+	var item: ItemData = data.get("item")
+	hand_tool.visible = item != null and item.is_tool
 
 
 ## Выбросить всю пачку из слота перед собой.

@@ -16,17 +16,21 @@ func get_prompt() -> String:
 
 
 func interact(player: Player) -> void:
+	harvest(1, player)
+
+
+## Добыча amount ударов за раз (инструмент ускоряет). Общая логика удара.
+func harvest(amount: int, player: Player) -> void:
 	if item == null:
 		push_error("ResourceNode без ItemData: %s" % get_path())
 		return
 	if player == null or player.inventory == null:
 		return
-	var leftover := player.inventory.add_item(item, yield_per_hit)
-	if leftover == yield_per_hit:
-		# Ничего не влезло — удар не засчитываем
+	var leftover := player.inventory.add_item(item, yield_per_hit * amount)
+	if leftover >= yield_per_hit * amount:
 		SignalHub.notify.emit("Инвентарь полон!")
 		return
-	_hits_done += 1
+	_hits_done += amount
 	AudioManager.play_hit(global_position)
 	if _hits_done >= hits_required:
 		queue_free()

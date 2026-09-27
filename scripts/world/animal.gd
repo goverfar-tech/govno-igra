@@ -1,5 +1,8 @@
 class_name Animal
 extends CharacterBody3D
+
+const PickupScene: PackedScene = preload("res://scenes/interaction/pickup_item.tscn")
+const Meat: ItemData = preload("res://resources/items/meat.tres")
 ## Кабан: патруль / погоня / атака. Обнаружение — по дистанции.
 ## Урон игроку — через player.stats.take_damage.
 
@@ -38,11 +41,21 @@ func _ready() -> void:
 	add_to_group("animals")
 
 
-func take_damage(amount: float, _from_position := Vector3.ZERO) -> void:
+func take_damage(amount: float, from_position := Vector3.ZERO) -> void:
 	health -= amount
 	if health <= 0.0:
 		SignalHub.notify.emit("Кабан повержен")
+		var drop := PickupScene.instantiate() as PickupItem
+		drop.item = Meat
+		drop.count = 2
+		get_parent().add_child(drop)
+		drop.global_position = global_position + Vector3(0.0, 0.3, 0.0)
 		queue_free()
+	else:
+		# отброс от атакующего
+		var away := global_position - from_position
+		away.y = 0.0
+		velocity += away.normalized() * 4.0
 
 
 func _physics_process(delta: float) -> void:

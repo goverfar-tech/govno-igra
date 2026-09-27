@@ -64,6 +64,13 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
+func _grunt(delta: float) -> void:
+	_grunt_timer -= delta
+	if _grunt_timer <= 0.0 and _player_dist() < 22.0:
+		AudioManager.play_grunt(global_position)
+		_grunt_timer = randf_range(3.0, 7.0)
+
+
 func _player_dist() -> float:
 	# игрок может появиться позже животного (порядок _ready), ищем лениво
 	if _player == null or not is_instance_valid(_player):
@@ -83,10 +90,7 @@ func _idle(delta: float) -> void:
 		var off := Vector2.from_angle(randf() * TAU) * randf() * home_radius
 		_target = _home + Vector3(off.x, 0, off.y)
 		_state = State.WANDER
-	_grunt_timer -= delta
-	if _grunt_timer <= 0.0 and _player_dist() < 18.0:
-		AudioManager.play_grunt(global_position)
-		_grunt_timer = randf_range(4.0, 9.0)
+	_grunt(delta)
 	if _player_dist() < detection_radius:
 		_state = State.CHASE
 		AudioManager.play_squeal(global_position)
@@ -98,6 +102,7 @@ func _wander(delta: float) -> void:
 	if flat.distance_to(Vector2(_target.x, _target.z)) < 1.0:
 		_state = State.IDLE
 		_idle_timer = randf_range(1.5, 4.0)
+	_grunt(delta)
 	if _player_dist() < detection_radius:
 		_state = State.CHASE
 		AudioManager.play_squeal(global_position)

@@ -20,7 +20,7 @@ func _ready() -> void:
 	_pickup_stream = _make_blip(660.0, 880.0, 0.12)
 	_eat_stream = _make_blip(440.0, 260.0, 0.25)
 	_grunt_stream = _make_grunt()
-	_squeal_stream = _make_blip(420.0, 900.0, 0.22)
+	_squeal_stream = _make_blip(600.0, 1300.0, 0.18)
 	_play_ambient(_make_wind())
 
 
@@ -41,7 +41,7 @@ func play_eat() -> void:
 
 
 ## Хрюканье/фырканье кабана (позиционное).
-func play_grunt(pos: Vector3, volume_db := -6.0) -> void:
+func play_grunt(pos: Vector3, volume_db := -3.0) -> void:
 	_play_3d(_grunt_stream, pos, volume_db)
 
 

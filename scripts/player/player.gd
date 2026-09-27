@@ -36,6 +36,7 @@ var _pitch := 0.0
 var _bob_timer := 0.0
 var _step_accum := 0.0
 var _swing_cooldown := 0.0
+var _hand_rest_x := 0.0
 
 
 func _ready() -> void:
@@ -45,6 +46,7 @@ func _ready() -> void:
 	SignalHub.selection_changed.connect(func(_i: int) -> void: _update_hand_tool())
 	SignalHub.inventory_changed.connect(func(_s: Array) -> void: _update_hand_tool())
 	hand_tool.visible = false
+	_hand_rest_x = hand_tool.rotation.x
 	call_deferred("_update_hand_tool")
 
 
@@ -186,8 +188,8 @@ func _swing_tool(item: ItemData) -> void:
 		return
 	_swing_cooldown = 0.6
 	var tween := create_tween()
-	tween.tween_property(hand_tool, "rotation:x", -1.2, 0.12)
-	tween.tween_property(hand_tool, "rotation:x", 0.0, 0.25)
+	tween.tween_property(hand_tool, "rotation:x", _hand_rest_x - 1.2, 0.12)
+	tween.tween_property(hand_tool, "rotation:x", _hand_rest_x, 0.25)
 	AudioManager.play_swing()
 	await get_tree().create_timer(0.12).timeout
 	if not is_instance_valid(interact_ray):

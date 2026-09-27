@@ -13,7 +13,6 @@ const AnimalScene: PackedScene = preload("res://scenes/world/animal.tscn")
 const Stone: ItemData = preload("res://resources/items/stone.tres")
 const Berry: ItemData = preload("res://resources/items/berry.tres")
 const Flask: ItemData = preload("res://resources/items/flask.tres")
-const Axe: ItemData = preload("res://resources/items/axe.tres")
 
 @export var scatter_seed := 4242
 @export var grove_center := Vector2(-45.0, -40.0)
@@ -101,7 +100,6 @@ func _scatter() -> void:
 	_place_pickup(Flask, Vector2(2.5, 1.5))
 	_place_pickup(Stone, Vector2(-3.0, 2.0))
 	_place_pickup(Berry, Vector2(1.5, -3.0), 3)
-	_place_pickup(Axe, Vector2(-1.5, -2.0))
 
 
 func _scatter_in_disc(rng: RandomNumberGenerator, scene: PackedScene,

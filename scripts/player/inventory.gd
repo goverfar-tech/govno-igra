@@ -129,6 +129,24 @@ func has_item(item: ItemData, count: int = 1) -> bool:
 	return count_of(item) >= count
 
 
+## Хватает ли ресурсов по рецепту {id: need}.
+func has_items(cost: Dictionary) -> bool:
+	for id in cost:
+		var item: ItemData = ITEM_DB.get(id)
+		if item == null or count_of(item) < cost[id]:
+			return false
+	return true
+
+
+## Списывает ресурсы по рецепту (только если их хватает). Возвращает успех.
+func pay_cost(cost: Dictionary) -> bool:
+	if not has_items(cost):
+		return false
+	for id in cost:
+		remove_item(ITEM_DB[id], cost[id])
+	return true
+
+
 ## Забирает count предметов. false, если не хватило.
 func remove_item(item: ItemData, count: int) -> bool:
 	if not has_item(item, count):

@@ -7,6 +7,7 @@ const RECIPES: Array = [
 	preload("res://resources/recipes/spear.tres"),
 	preload("res://resources/recipes/wall.tres"),
 	preload("res://resources/recipes/campfire.tres"),
+	preload("res://resources/recipes/pickaxe.tres"),
 ]
 
 var _player: Player

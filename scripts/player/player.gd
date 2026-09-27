@@ -204,8 +204,8 @@ func _swing_tool(item: ItemData) -> void:
 			c.take_damage(item.tool_damage, global_position)
 			AudioManager.play_hit(c.global_position)
 		elif c is ResourceNode:
-			if not c.tool_allowed:
-				SignalHub.notify.emit("Этот ресурс топором не добыть")
+			if c.tool_id != item.id:
+				SignalHub.notify.emit("Здесь нужен другой инструмент")
 			else:
 				c.harvest(2, self)
 				if c.is_queued_for_deletion():
@@ -241,13 +241,14 @@ func _update_hand_tool() -> void:
 	var data := inventory.get_selected_slot()
 	var item: ItemData = data.get("item")
 	hand_tool.visible = item != null and item.is_tool
-	if item != null and item.is_tool:
-		# окраска лезвия под предмет (копьё «деревянное», топор «каменный»)
-		var blade := hand_tool.get_node_or_null("Blade") as MeshInstance3D
-		if blade:
-			var mat := StandardMaterial3D.new()
-			mat.albedo_color = item.icon_color
-			blade.material_override = mat
+	if item == null or not item.is_tool:
+		return
+	# переключаем модель под предмет: Model_axe / Model_spear / Model_pickaxe
+	for m in hand_tool.get_children():
+		m.visible = false
+	var model := hand_tool.get_node_or_null("Model_" + String(item.id))
+	if model:
+		model.visible = true
 
 
 ## Выбросить всю пачку из слота перед собой.

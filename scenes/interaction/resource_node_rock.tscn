@@ -18,7 +18,7 @@ size = Vector3(1.2, 0.9, 1.0)
 script = ExtResource("1_node")
 item = ExtResource("2_stone")
 hits_required = 3
-tool_allowed = false
+tool_id = &"pickaxe"
 yield_per_hit = 2
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

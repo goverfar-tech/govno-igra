@@ -161,6 +161,9 @@ func use_selected_item() -> void:
 			stats.apply_food(item.nutrition, item.hydration)
 			AudioManager.play_eat()
 			SignalHub.notify.emit("Съедено: %s" % item.display_name)
+			# Возврат тары (полная фляга -> пустая)
+			if item.consume_returns != null:
+				inventory.add_item(item.consume_returns, 1)
 	else:
 		SignalHub.notify.emit("Это нельзя съесть")
 

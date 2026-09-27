@@ -1,0 +1,33 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/interaction/berry_bush.gd" id="1_bush"]
+
+[ext_resource type="Resource" path="res://resources/items/berry.tres" id="2_berry"]
+
+[sub_resource type="StandardMaterial3D" id="bush_mat"]
+albedo_color = Color(0.25, 0.45, 0.2, 1)
+
+[sub_resource type="CylinderShape3D" id="col"]
+radius = 0.55
+height = 1.0
+
+[sub_resource type="SphereMesh" id="crown_mesh"]
+material = SubResource("bush_mat")
+radius = 0.65
+height = 1.1
+radial_segments = 12
+rings = 6
+
+[node name="BerryBush" type="StaticBody3D"]
+script = ExtResource("1_bush")
+item = ExtResource("2_berry")
+yield_count = 2
+regrow_seconds = 60.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("col")
+
+[node name="CrownMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7, 0, 0, 0, 1, 0, 0.55, 0)
+mesh = SubResource("crown_mesh")

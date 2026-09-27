@@ -12,3 +12,5 @@ extends Resource
 @export var is_edible := false
 @export var nutrition := 0.0
 @export var hydration := 0.0
+## Что остаётся в инвентаре после использования (полная фляга -> пустая)
+@export var consume_returns: ItemData

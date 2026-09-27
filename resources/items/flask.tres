@@ -1,12 +1,15 @@
-[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://resources/items/item_data.gd" id="1"]
+
+[ext_resource type="Resource" path="res://resources/items/flask_empty.tres" id="2"]
 
 [resource]
 script = ExtResource("1")
 id = &"flask"
-display_name = "Фляга воды"
+display_name = "Фляга (полная)"
 icon_color = Color(0.3, 0.5, 0.85, 1)
 max_stack = 1
 is_edible = true
 hydration = 40.0
+consume_returns = ExtResource("2")

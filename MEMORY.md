@@ -43,11 +43,10 @@ res://
 │   ├── main/game.tscn — MAIN: World + Player + HUD (спаун по марkеру мира)
 │   ├── player/player.tscn        — игрок (CharacterBody3D + Head + Camera3D)
 │   │     дочерние: InteractRay, Inventory, Stats
-│   ├── world/world_prototype.tscn — тестовая локация 60×60 (CSG blockout):
-│   │     земля, холм-конус, 10 деревьев-декора, 3 камня, 2 дома с дверными
-│   │     проёмами, Bounds-стены, маркеры PickupSpawnPoints/PlayerSpawn,
-│   │     4 PickupItem (камни х2, ягоды х3, фляга), 2 добываемых дерева,
-│   │     камень-жилка
+│   ├── world/world_prototype.tscn — большой мир 200×200:
+│   │     Terrain (шумовой рельеф), DayNight, Bounds, PlayerSpawn, Lake,
+│   │     WorldGen (роща/жилы/кусты рассеиваются по seed)
+│   ├── world/terrain.tscn  — ландшафт (HeightMapShape3D, вершинные цвета)
 │   ├── interaction/pickup_item.tscn         — подбираемый предмет
 │   ├── interaction/resource_node_tree.tscn  — добываемое дерево (3 удара)
 │   ├── interaction/resource_node_rock.tscn  — камень-жилка (3 удара)
@@ -63,6 +62,8 @@ res://
 └── scripts/
     ├── main/game.gd              — сборка сцены, спаун игрока (class_name Game)
     ├── world/day_night.gd        — сутки 300 сек, день/ночь (class_name DayNight)
+    ├── world/terrain.gd          — процедурный ландшафт (class_name Terrain)
+    ├── world/world_gen.gd        — рассеивание объектов (class_name WorldGen)
     ├── autoload/audio_manager.gd — процедурные звуки: шаги/удары/подбор/еда/ветер
     ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,
     │                             inventory_changed, selection_changed,
@@ -146,5 +147,8 @@ docs/      дизайн-заметки
       тост «Наступила ночь», сигнал time_of_day_changed)
 - [x] Этап 1.2 — звук: AudioManager синтезирует шаги, удары по источникам,
       подбор, еду; фоновый ветер-амбьент
+- [x] Этап 1.3 — большой мир: террейн по шуму, роща 25 деревьев + одиночные,
+      ~10 жил, ~15 кустов ягод (регенерация 60 с), озеро с наполнением фляги
+      (фляга полная/пустая, release-контракт consume_returns)
 - [ ] Этап 1.3 — больший мир: кусты ягод, родник, рельеф
 - [ ] Этап 1.4 — главное меню

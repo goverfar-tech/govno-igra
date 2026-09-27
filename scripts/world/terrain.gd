@@ -17,8 +17,15 @@ extends StaticBody3D
 var heights: PackedFloat32Array
 var resolution: int                  # вершин по стороне (segments + 1)
 
+# зонирование цвета рельефа (см. world_gen.gd — роща/трасса)
+var GROVE_CENTER := Vector2(-45.0, -40.0)
+var _tint_noise := FastNoiseLite.new()
+
 
 func _ready() -> void:
+	_tint_noise.seed = noise_seed + 7
+	_tint_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	_tint_noise.frequency = 12.0 / size
 	_generate()
 
 
@@ -74,15 +81,28 @@ func _vertex_pos(x: int, z: int) -> Vector3:
 	return Vector3(wx, heights[z * resolution + x], wz)
 
 
-func _color_for_height(h: float) -> Color:
-	# трава -> камень -> светлые вершины
-	if h < 0.6:
-		return Color(0.18, 0.24, 0.17)            # низина/дно озера
-	if h < 2.5:
-		return Color(0.24, 0.34, 0.2)             # трава
-	elif h < 5.5:
-		return Color(0.38, 0.36, 0.33)            # каменистый склон
-	return Color(0.5, 0.5, 0.55)               # вершины
+func _color_for(wx: float, wz: float, h: float) -> Color:
+	# базовая трава с лёгкой пятнистостью
+	var t := _tint_noise.get_noise_2d(wx, wz) * 0.5 + 0.5
+	var col := Color(0.2, 0.3, 0.17).lerp(Color(0.27, 0.37, 0.21), t)
+
+	var p := Vector2(wx, wz)
+	# роща — темнее и сочнее
+	var d_grove := p.distance_to(GROVE_CENTER)
+	if d_grove < 30.0:
+		col = col.lerp(Color(0.16, 0.28, 0.14), 1.0 - smoothstep(18.0, 30.0, d_grove))
+	# трасса — серая полоса (диагональ z = 4/11 x - 25)
+	var d_road := absf(0.364 * wx - wz - 25.0) / 1.064
+	if d_road < 4.0:
+		col = col.lerp(Color(0.32, 0.32, 0.33), 1.0 - smoothstep(2.0, 4.0, d_road))
+	# берег озера — тёмная влажная земля
+	var d_lake := p.distance_to(lake_center)
+	if d_lake < lake_radius + 3.0:
+		col = col.lerp(Color(0.2, 0.22, 0.16), 1.0 - smoothstep(lake_radius * 0.5, lake_radius + 3.0, d_lake))
+	# каменистые склоны и вершины
+	if h > 5.5:
+		col = col.lerp(Color(0.48, 0.47, 0.5), smoothstep(5.5, 8.0, h))
+	return col
 
 
 func _build_mesh() -> void:
@@ -95,18 +115,18 @@ func _build_mesh() -> void:
 			var v10 := _vertex_pos(x + 1, z)
 			var v01 := _vertex_pos(x, z + 1)
 			var v11 := _vertex_pos(x + 1, z + 1)
-			st.set_color(_color_for_height(v00.y))
+			st.set_color(_color_for(v00.x, v00.z, v00.y))
 			st.add_vertex(v00)
-			st.set_color(_color_for_height(v10.y))
+			st.set_color(_color_for(v10.x, v10.z, v10.y))
 			st.add_vertex(v10)
-			st.set_color(_color_for_height(v01.y))
+			st.set_color(_color_for(v01.x, v01.z, v01.y))
 			st.add_vertex(v01)
 
-			st.set_color(_color_for_height(v10.y))
+			st.set_color(_color_for(v10.x, v10.z, v10.y))
 			st.add_vertex(v10)
-			st.set_color(_color_for_height(v11.y))
+			st.set_color(_color_for(v11.x, v11.z, v11.y))
 			st.add_vertex(v11)
-			st.set_color(_color_for_height(v01.y))
+			st.set_color(_color_for(v01.x, v01.z, v01.y))
 			st.add_vertex(v01)
 
 	st.generate_normals()

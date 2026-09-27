@@ -30,7 +30,7 @@ const Flask: ItemData = preload("res://resources/items/flask.tres")
 @export var lone_trees := 10
 @export var rocks_count := 10
 @export var bushes_count := 15
-@export var animals_count := 3
+@export var animals_count := 6
 @export var ruins_count := 4
 @export var poles_count := 6
 @export var crates_per_ruin := 2
@@ -223,7 +223,7 @@ func _scatter_grass(rng: RandomNumberGenerator, half: float) -> void:
 			var g := sc.instantiate() as Node3D
 			g.position = Vector3(p.x, _terrain.height_at(p.x, p.y), p.y)
 			g.rotation.y = rng.randf() * TAU
-			var sc_factor := rng.randf_range(0.8, 1.4)
+			var sc_factor := rng.randf_range(1.6, 2.4) if sc == GrassSmallScene else rng.randf_range(0.8, 1.4)
 			g.scale = Vector3.ONE * sc_factor
 			add_child(g)
 

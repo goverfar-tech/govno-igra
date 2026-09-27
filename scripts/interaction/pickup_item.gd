@@ -13,7 +13,7 @@ func _ready() -> void:
 		var packed := load(item.world_model) as PackedScene
 		if packed:
 			var m := packed.instantiate()
-			m.scale = Vector3.ONE * 0.4
+			m.scale = Vector3.ONE * 2.5
 			add_child(m)
 			$MeshInstance3D.visible = false
 			return

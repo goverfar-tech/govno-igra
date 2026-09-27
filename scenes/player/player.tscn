@@ -70,7 +70,7 @@ fov = 75.0
 
 [node name="InteractRay" type="RayCast3D" parent="Head/Camera3D"]
 target_position = Vector3(0, 0, -2.5)
-collision_mask = 3
+collision_mask = 7
 collide_with_areas = false
 script = ExtResource("2_ray")
 
@@ -81,18 +81,18 @@ transform = Transform3D(1, 0, 0, 0, 0.94, -0.34, 0, 0.34, 0.94, 0.35, -0.3, -0.5
 [node name="Model_axe" type="Node3D" parent="Head/Camera3D/HandTool"]
 
 [node name="Axe" parent="Head/Camera3D/HandTool/Model_axe" instance=ExtResource("5_axe")]
-transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -0.1, 0)
+transform = Transform3D(2.2, 0, 0, 0, 2.2, 0, 0, 0, 2.2, 0, -0.15, 0)
 
 [node name="Model_spear" type="Node3D" parent="Head/Camera3D/HandTool"]
 
 [node name="Spear" parent="Head/Camera3D/HandTool/Model_spear" instance=ExtResource("6_spear")]
-transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -0.1, 0)
+transform = Transform3D(2.2, 0, 0, 0, 2.2, 0, 0, 0, 2.2, 0, -0.15, 0)
 visible = false
 
 [node name="Model_pickaxe" type="Node3D" parent="Head/Camera3D/HandTool"]
 
 [node name="Pickaxe" parent="Head/Camera3D/HandTool/Model_pickaxe" instance=ExtResource("7_pickaxe")]
-transform = Transform3D(1.1, 0, 0, 0, 1.1, 0, 0, 0, 1.1, 0, -0.1, 0)
+transform = Transform3D(2.2, 0, 0, 0, 2.2, 0, 0, 0, 2.2, 0, -0.15, 0)
 visible = false
 
 [node name="Inventory" type="Node" parent="."]

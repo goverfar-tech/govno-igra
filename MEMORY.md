@@ -63,6 +63,7 @@ res://
     ├── main/game.gd              — сборка сцены, спаун игрока (class_name Game)
     ├── world/day_night.gd        — сутки 300 сек, день/ночь (class_name DayNight)
     ├── world/terrain.gd          — процедурный ландшафт (class_name Terrain)
+    ├── world/animal.gd           — кабан: IDLE/WANDER/CHASE/ATTACK (class_name Animal)
     ├── world/world_gen.gd        — рассеивание объектов (class_name WorldGen)
     ├── autoload/audio_manager.gd — процедурные звуки: шаги/удары/подбор/еда/ветер
     ├── autoload/signal_hub.gd    — шина сигналов (prompt_changed, notify,

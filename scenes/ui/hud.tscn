@@ -13,6 +13,15 @@
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_script")
 
+[node name="DamageFlash" type="ColorRect" parent="."]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(1, 0.1, 0.1, 1)
+modulate = Color(1, 1, 1, 0)
+
 [node name="StatsBars" type="VBoxContainer" parent="."]
 anchors_preset = 0
 offset_left = 12.0

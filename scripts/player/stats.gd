@@ -48,6 +48,18 @@ func _emit() -> void:
 		SignalHub.stats_changed.emit(health, hunger, thirst)
 
 
+## Получить урон (кабан и будущие источники). Игнорируется после смерти.
+func take_damage(amount: float) -> void:
+	if is_dead:
+		return
+	health = maxf(0.0, health - amount)
+	SignalHub.player_damaged.emit(amount)
+	if health <= 0.0:
+		is_dead = true
+		SignalHub.player_died.emit()
+	_emit()
+
+
 ## Съесть/выпить предмет: восстанавливает сытость и жажду.
 func apply_food(nutrition: float, hydration: float) -> void:
 	hunger = minf(MAX_VALUE, hunger + nutrition)

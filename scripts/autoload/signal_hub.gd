@@ -20,6 +20,9 @@ signal selection_changed(index: int)
 ## Статы игрока изменились (значения 0..100).
 signal stats_changed(health: float, hunger: float, thirst: float)
 
+## Игрок получил урон (для вспышки на HUD и прочих реакций).
+signal player_damaged(amount: float)
+
 ## Игрок погиб.
 signal player_died
 

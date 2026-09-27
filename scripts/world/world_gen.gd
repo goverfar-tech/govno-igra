@@ -8,6 +8,7 @@ const TreeScene: PackedScene = preload("res://scenes/interaction/resource_node_t
 const RockScene: PackedScene = preload("res://scenes/interaction/resource_node_rock.tscn")
 const BushScene: PackedScene = preload("res://scenes/interaction/berry_bush.tscn")
 const PickupScene: PackedScene = preload("res://scenes/interaction/pickup_item.tscn")
+const AnimalScene: PackedScene = preload("res://scenes/world/animal.tscn")
 
 const Stone: ItemData = preload("res://resources/items/stone.tres")
 const Berry: ItemData = preload("res://resources/items/berry.tres")
@@ -20,6 +21,7 @@ const Flask: ItemData = preload("res://resources/items/flask.tres")
 @export var lone_trees := 10
 @export var rocks_count := 10
 @export var bushes_count := 15
+@export var animals_count := 3
 
 var _terrain: Terrain
 var _occupied: Array[Vector2] = []
@@ -86,6 +88,7 @@ func _scatter() -> void:
 	_scatter_in_area(rng, TreeScene, half, lone_trees, 4.0)
 	_scatter_in_area(rng, RockScene, half, rocks_count, 4.0)
 	_scatter_in_area(rng, BushScene, half, bushes_count, 4.0)
+	_scatter_in_area(rng, AnimalScene, half * 0.7, animals_count, 20.0)
 
 	# подборы рядом со спауном: полная фляга, камень, ягоды
 	_place_pickup(Flask, Vector2(2.5, 1.5))

@@ -69,6 +69,10 @@ public static class SetupMainScene
         debugHud.stats = playerGo.GetComponent<Stats>();
         debugHud.inventory = playerGo.GetComponent<Inventory>();
 
+        // --- префабы построек (нужны предметам-ссылкам ниже) ---
+        var campfirePrefab = CreateCampfirePrefab();
+        var wallPrefab = CreateWallPrefab();
+
         // --- предметы (ScriptableObject-ассеты) ---
         // Полный набор из Godot-эталона (§5, баланс §10). SyncItem
         // ПЕРЕЗАПИСЫВАЕТ поля даже у существующих ассетов — правки
@@ -84,8 +88,8 @@ public static class SetupMainScene
         var axe = SyncItem("axe", "Каменный топор", 1, isTool: true, toolDamage: 8f, worldModel: "tool-axe");
         var pickaxe = SyncItem("pickaxe", "Кирка", 1, isTool: true, toolDamage: 5f, worldModel: "tool-pickaxe");
         var spear = SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
-        var campfire = SyncItem("campfire", "Костёр", 5, isPlaceable: true);
-        var wall = SyncItem("wall", "Деревянная стена", 10, isPlaceable: true);
+        var campfire = SyncItem("campfire", "Костёр", 5, isPlaceable: true, placeablePrefab: campfirePrefab);
+        var wall = SyncItem("wall", "Деревянная стена", 10, isPlaceable: true, placeablePrefab: wallPrefab);
 
         // --- пикап-заготовка для дропа ---
         // (берём бревно как визуал дропа дерева)
@@ -104,6 +108,7 @@ public static class SetupMainScene
             Object.DestroyImmediate(pickupGo);
             pickupPrefabAsset = AssetDatabase.LoadAssetAtPath<PickupItem>("Assets/Prefabs/Pickup.prefab");
         }
+        player.Inventory.pickupPrefab = pickupPrefabAsset; // для выброса по ПКМ
 
         // --- стартовый тайник у спауна: фляга, инструменты, еда ---
         // (для M2-теста; при M4 всё это заменится находками в мире)
@@ -222,7 +227,7 @@ public static class SetupMainScene
     static ItemData SyncItem(string id, string displayName, int maxStack,
         float food = 0f, float water = 0f, float heal = 0f,
         ItemData consumeReturns = null, bool isTool = false, float toolDamage = 0f,
-        bool isPlaceable = false, string worldModel = null)
+        bool isPlaceable = false, string worldModel = null, GameObject placeablePrefab = null)
     {
         string path = $"Assets/Items/{id}.asset";
         var item = AssetDatabase.LoadAssetAtPath<ItemData>(path);
@@ -240,6 +245,7 @@ public static class SetupMainScene
         item.toolDamage = toolDamage;
         item.isPlaceable = isPlaceable;
         if (worldModel != null) item.worldModel = LoadModel(worldModel);
+        if (placeablePrefab != null) item.placeablePrefab = placeablePrefab;
 
         if (created) AssetDatabase.CreateAsset(item, path);
         else EditorUtility.SetDirty(item);
@@ -321,6 +327,61 @@ public static class SetupMainScene
         var pk = go.GetComponent<PickupItem>();
         pk.item = item;
         pk.count = count;
+    }
+
+    // Постройка «Костёр»: модель + коллайдер + дрожащий свет.
+    static GameObject CreateCampfirePrefab()
+    {
+        EnsureFolder("Assets/Prefabs/Placeables");
+        string path = "Assets/Prefabs/Placeables/Campfire.prefab";
+        var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (existing != null) return existing;
+
+        var root = new GameObject("Campfire");
+        var model = LoadModel("campfire-pit");
+        if (model != null)
+        {
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            inst.transform.SetParent(root.transform, false);
+            inst.transform.localScale = Vector3.one * 3.5f;
+        }
+        var col = root.AddComponent<CapsuleCollider>();
+        col.center = new Vector3(0f, 0.25f, 0f);
+        col.radius = 0.7f;
+        col.height = 0.5f;
+
+        var glow = new GameObject("Glow");
+        glow.transform.SetParent(root.transform, false);
+        glow.transform.localPosition = new Vector3(0f, 0.7f, 0f);
+        var light = glow.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = new Color(1f, 0.6f, 0.25f);
+        light.range = 9f;
+        light.intensity = 2f;
+        glow.AddComponent<FireLight>();
+
+        return PrefabUtility.SaveAsPrefabAsset(root, path);
+    }
+
+    // Постройка «Стена»: короб 2.5×2.5×0.25 (стиль Godot-версии).
+    static GameObject CreateWallPrefab()
+    {
+        EnsureFolder("Assets/Prefabs/Placeables");
+        string path = "Assets/Prefabs/Placeables/Wall.prefab";
+        var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (existing != null) return existing;
+
+        var root = new GameObject("Wall");
+        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.name = "Model";
+        cube.transform.SetParent(root.transform, false);
+        cube.transform.localPosition = new Vector3(0f, 1.25f, 0f);
+        cube.transform.localScale = new Vector3(2.5f, 2.5f, 0.25f);
+        cube.GetComponent<MeshRenderer>().sharedMaterial =
+            CreateMaterial("Wood", new Color(0.55f, 0.4f, 0.22f));
+        // коллайдер у примитива свой; дублировать на root не нужно
+
+        return PrefabUtility.SaveAsPrefabAsset(root, path);
     }
 
     static void EnsureFolder(string path)

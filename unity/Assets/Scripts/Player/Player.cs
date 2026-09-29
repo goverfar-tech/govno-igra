@@ -31,6 +31,7 @@ public class Player : MonoBehaviour
     CharacterController cc;
     float pitch;
     float verticalVel;
+    float placeCooldown;
     IInteractable focus;
     string lastPrompt;
 
@@ -45,6 +46,7 @@ public class Player : MonoBehaviour
 
     void Update()
     {
+        placeCooldown -= Time.deltaTime;
         if (Stats.IsDead) return;
         Look();
         Move();
@@ -54,7 +56,10 @@ public class Player : MonoBehaviour
             focus.Interact(this);
 
         if (Input.GetMouseButtonDown(0))
-            Inventory.UseSelected(this);
+            UseSelected();
+
+        if (Input.GetMouseButtonDown(1))
+            Inventory.DropSelected(this);
 
         for (int i = 0; i < Inventory.HotbarSize; i++)
             if (Input.GetKeyDown(KeyCode.Alpha1 + i))
@@ -63,6 +68,39 @@ public class Player : MonoBehaviour
         float wheel = Input.GetAxis("Mouse ScrollWheel");
         if (wheel > 0f) Inventory.Select((Inventory.selected + 1) % Inventory.HotbarSize);
         if (wheel < 0f) Inventory.Select((Inventory.selected + Inventory.HotbarSize - 1) % Inventory.HotbarSize);
+    }
+
+    // ЛКМ: постройка > расходник (Godot-эталон: player.gd use_selected_item)
+    void UseSelected()
+    {
+        var slot = Inventory.SelectedSlot;
+        if (slot.IsEmpty) return;
+        if (slot.item.isPlaceable && TryPlace(slot.item)) return;
+        Inventory.UseSelected(this);
+    }
+
+    // Установить постройку на поверхность перед игроком (до 6 м).
+    // Порт _try_place из Godot-версии; превью-призрак — отдельной полировкой.
+    bool TryPlace(ItemData item)
+    {
+        if (placeCooldown > 0f) return true;
+        if (item.placeablePrefab == null) return true;
+
+        var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
+        if (!Physics.Raycast(origin, (head != null ? head.forward : transform.forward),
+                out var hit, 6f, interactMask))
+        {
+            GameEvents.RaiseNotify("Сюда не поставить");
+            return true;
+        }
+        if (!Inventory.RemoveItem(item, 1)) return true;
+
+        placeCooldown = 0.4f;
+        var placed = Instantiate(item.placeablePrefab, hit.point,
+            Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
+        placed.name = item.displayName;
+        GameEvents.RaiseNotify("Построено: " + item.displayName);
+        return true;
     }
 
     void Look()

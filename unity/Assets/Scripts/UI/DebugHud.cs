@@ -13,6 +13,7 @@ public class DebugHud : MonoBehaviour
     string toast;
     float toastUntil;
     bool dead;
+    bool panelOpen;
 
     void OnEnable()
     {
@@ -39,6 +40,11 @@ public class DebugHud : MonoBehaviour
 
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Tab))
+        {
+            panelOpen = !panelOpen;
+            GameEvents.RaiseInventoryOpenChanged(panelOpen);
+        }
         if (dead && Input.GetKeyDown(KeyCode.R))
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
@@ -73,6 +79,23 @@ public class DebugHud : MonoBehaviour
 
         if (!string.IsNullOrEmpty(prompt))
             GUI.Label(new Rect(Screen.width / 2f - 200, Screen.height / 2f + 30, 400, 24), prompt, style);
+
+        // полный инвентарь по Tab (стопгап до uGUI-HUD в M3)
+        if (panelOpen && inventory != null)
+        {
+            GUI.Box(new Rect(Screen.width / 2f - 260, 100, 520, 200), "Инвентарь (Tab)");
+            for (int i = 0; i < Inventory.Size; i++)
+            {
+                var s = inventory.slots[i];
+                string cell = s.IsEmpty ? "—" : $"{s.item.displayName} ×{s.count}";
+                float x = Screen.width / 2f - 240 + (i % 4) * 125f;
+                float yy = 135 + (i / 4) * 28f;
+                GUI.Label(new Rect(x, yy, 125, 24),
+                    i == inventory.selected ? $"[{cell}]" : cell, style);
+            }
+            GUI.Label(new Rect(Screen.width / 2f - 240, 290, 500, 24),
+                "ПКМ — выбросить активный слот", style);
+        }
 
         if (Time.time < toastUntil)
             GUI.Label(new Rect(Screen.width / 2f - 200, 60, 400, 24), toast, style);

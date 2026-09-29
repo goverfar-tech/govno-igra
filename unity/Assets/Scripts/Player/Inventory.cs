@@ -17,6 +17,7 @@ public class Inventory : MonoBehaviour
 
     public List<Slot> slots = new List<Slot>();
     public int selected;            // активный слот хотбара 0..4
+    public PickupItem pickupPrefab; // чем выбрасываем предметы в мир
 
     void Awake()
     {
@@ -76,6 +77,41 @@ public class Inventory : MonoBehaviour
     public void ConsumeReturns(ItemData returned)
     {
         if (returned != null) Add(returned, 1);
+    }
+
+    // Убрать из инвентаря count штук предмета; false — если столько нет.
+    public bool RemoveItem(ItemData item, int count)
+    {
+        if (item == null || count <= 0) return false;
+        foreach (var s in slots)
+            if (!s.IsEmpty && s.item == item)
+            {
+                int take = Mathf.Min(count, s.count);
+                s.count -= take;
+                count -= take;
+                if (s.count <= 0) { s.item = null; s.count = 0; }
+                if (count == 0)
+                {
+                    GameEvents.RaiseInventoryChanged();
+                    return true;
+                }
+            }
+        return false;
+    }
+
+    // Выбросить пачку из активного слота перед игроком (ПКМ).
+    public void DropSelected(Player player)
+    {
+        var s = SelectedSlot;
+        if (s.IsEmpty || pickupPrefab == null || player == null) return;
+        var drop = Instantiate(pickupPrefab,
+            player.transform.position + player.transform.forward * 1.2f + Vector3.up * 0.3f,
+            Quaternion.identity);
+        drop.item = s.item;
+        drop.count = s.count;
+        s.item = null;
+        s.count = 0;
+        GameEvents.RaiseInventoryChanged();
     }
 
     public void Select(int index)

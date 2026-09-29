@@ -23,8 +23,9 @@ public class ItemData : ScriptableObject
     public bool isTool;
     public float toolDamage;
 
-    [Header("Строительство (для M5)")]
+    [Header("Строительство")]
     public bool isPlaceable;
+    public GameObject placeablePrefab;   // что ставится в мир (коллайдеры внутри)
 
     public bool IsConsumable => foodRestore > 0f || waterRestore > 0f || healAmount > 0f;
 }

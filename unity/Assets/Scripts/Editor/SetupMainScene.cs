@@ -70,10 +70,22 @@ public static class SetupMainScene
         debugHud.inventory = playerGo.GetComponent<Inventory>();
 
         // --- предметы (ScriptableObject-ассеты) ---
+        // Полный набор из Godot-эталона (§5, баланс §10). SyncItem
+        // ПЕРЕЗАПИСЫВАЕТ поля даже у существующих ассетов — правки
+        // баланса сюда, потом перезапуск Setup.
         EnsureFolder("Assets/Items");
-        var wood = CreateItem("wood", "Дерево", 20);
-        var stone = CreateItem("stone", "Камень", 20);
-        var berry = CreateItem("berry", "Ягода", 10, foodRestore: 15f);
+        var flaskEmpty = SyncItem("flask_empty", "Фляга (пустая)", 1, worldModel: "bottle");
+        SyncItem("flask", "Фляга (полная)", 1, water: 40f, consumeReturns: flaskEmpty);
+        var wood = SyncItem("wood", "Древесина", 30, worldModel: "resource-wood");
+        var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
+        var berry = SyncItem("berry", "Ягода", 20, food: 12f);
+        SyncItem("meat", "Сырое мясо", 10, food: 25f);
+        SyncItem("cooked_meat", "Жаркое", 10, food: 45f);
+        SyncItem("axe", "Каменный топор", 1, isTool: true, toolDamage: 8f, worldModel: "tool-axe");
+        SyncItem("pickaxe", "Кирка", 1, isTool: true, toolDamage: 5f, worldModel: "tool-pickaxe");
+        SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
+        SyncItem("campfire", "Костёр", 5, isPlaceable: true);
+        SyncItem("wall", "Деревянная стена", 10, isPlaceable: true);
 
         // --- пикап-заготовка для дропа ---
         // (берём бревно как визуал дропа дерева)
@@ -195,22 +207,32 @@ public static class SetupMainScene
         EditorUtility.DisplayDialog("Survival", msg, "Ок");
     }
 
-    static ItemData CreateItem(string id, string displayName, int maxStack, float foodRestore = 0f,
-        float waterRestore = 0f, float healAmount = 0f, ItemData consumeReturns = null)
+    // Создаёт ItemData-ассет ИЛИ перезаписывает поля существующего —
+    // повторный запуск Setup приводит баланс к значениям из кода.
+    static ItemData SyncItem(string id, string displayName, int maxStack,
+        float food = 0f, float water = 0f, float heal = 0f,
+        ItemData consumeReturns = null, bool isTool = false, float toolDamage = 0f,
+        bool isPlaceable = false, string worldModel = null)
     {
         string path = $"Assets/Items/{id}.asset";
-        var existing = AssetDatabase.LoadAssetAtPath<ItemData>(path);
-        if (existing != null) return existing;
+        var item = AssetDatabase.LoadAssetAtPath<ItemData>(path);
+        bool created = item == null;
+        if (created) item = ScriptableObject.CreateInstance<ItemData>();
 
-        var item = ScriptableObject.CreateInstance<ItemData>();
         item.id = id;
         item.displayName = displayName;
         item.maxStack = maxStack;
-        item.foodRestore = foodRestore;
-        item.waterRestore = waterRestore;
-        item.healAmount = healAmount;
+        item.foodRestore = food;
+        item.waterRestore = water;
+        item.healAmount = heal;
         item.consumeReturns = consumeReturns;
-        AssetDatabase.CreateAsset(item, path);
+        item.isTool = isTool;
+        item.toolDamage = toolDamage;
+        item.isPlaceable = isPlaceable;
+        if (worldModel != null) item.worldModel = LoadModel(worldModel);
+
+        if (created) AssetDatabase.CreateAsset(item, path);
+        else EditorUtility.SetDirty(item);
         return item;
     }
 

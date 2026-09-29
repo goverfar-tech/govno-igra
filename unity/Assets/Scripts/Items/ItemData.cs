@@ -19,5 +19,12 @@ public class ItemData : ScriptableObject
     // Что возвращается после использования (фляга: полная → пустая)
     public ItemData consumeReturns;
 
+    [Header("Инструмент (для системы добычи/боя, M5)")]
+    public bool isTool;
+    public float toolDamage;
+
+    [Header("Строительство (для M5)")]
+    public bool isPlaceable;
+
     public bool IsConsumable => foodRestore > 0f || waterRestore > 0f || healAmount > 0f;
 }

@@ -1,39 +1,57 @@
 using UnityEngine;
 
-// HP / сытость / жажда (аналог stats.gd).
+// HP / сытость / жажда (аналог stats.gd, числа — из Godot-эталона §10).
+// Майонезная мета: «еда» позже переосмыслится как уровень майонеза
+// в ведре с пробитым дном (§9.2) — расход уже сейчас и есть утечка.
 public class Stats : MonoBehaviour
 {
     public float maxHp = 100f;
     public float maxFood = 100f;
     public float maxWater = 100f;
 
-    [Header("Расход в секунду (бег ×1.6)")]
-    public float foodDrain = 0.35f;
-    public float waterDrain = 0.55f;
-    public float starveDamage = 1f;   // HP/сек при нулевой сытости
-    public float thirstDamage = 1.5f; // HP/сек при нулевой жажде
+    [Header("Расход в секунду (Godot-эталон: еда ~10 мин, вода ~6 мин)")]
+    public float foodDrain = 100f / 600f;
+    public float waterDrain = 100f / 360f;
+    public float starveDamage = 1f;      // HP/сек при нулевом стате
+    public float thirstDamage = 1f;
     public float sprintDrainMultiplier = 1.6f;
+    public float nightDrainMultiplier = 1.5f;  // ночью прохладно — расход выше
+
+    [Header("Регенерация (еда И вода выше порога)")]
+    public float regenMinStat = 70f;
+    public float regenRate = 0.5f;       // HP/сек
 
     public float Hp { get; private set; }
     public float Food { get; private set; }
     public float Water { get; private set; }
     public bool IsDead { get; private set; }
 
+    bool isNight;
+
     void Awake()
     {
         Hp = maxHp; Food = maxFood; Water = maxWater;
     }
 
+    void OnEnable() => GameEvents.TimeOfDayChanged += OnTimeChanged;
+    void OnDisable() => GameEvents.TimeOfDayChanged -= OnTimeChanged;
+    void OnTimeChanged(float t, bool night) => isNight = night;
+
     // Вызывается из Player: знает, бежит ли игрок
     public void Tick(float dt, bool sprinting)
     {
         if (IsDead) return;
-        float mult = sprinting ? sprintDrainMultiplier : 1f;
+        float mult = (sprinting ? sprintDrainMultiplier : 1f)
+                   * (isNight ? nightDrainMultiplier : 1f);
         Food = Mathf.Max(0f, Food - foodDrain * mult * dt);
         Water = Mathf.Max(0f, Water - waterDrain * mult * dt);
 
         if (Food <= 0f) Damage(starveDamage * dt);
         if (Water <= 0f) Damage(thirstDamage * dt);
+
+        if (!IsDead && Food > regenMinStat && Water > regenMinStat)
+            Hp = Mathf.Min(maxHp, Hp + regenRate * dt);
+
         GameEvents.RaiseStatsChanged();
     }
 

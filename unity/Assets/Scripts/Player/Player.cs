@@ -32,6 +32,7 @@ public class Player : MonoBehaviour
     float pitch;
     float verticalVel;
     IInteractable focus;
+    string lastPrompt;
 
     void Awake()
     {
@@ -109,10 +110,14 @@ public class Player : MonoBehaviour
         if (Physics.Raycast(cam.position, cam.forward, out var info, interactRange, interactMask))
             hit = info.collider.GetComponentInParent<IInteractable>();
 
-        if (!ReferenceEquals(hit, focus))
+        // подсказка пересылается и при смене цели, и при смене текста
+        // (после удара по узлу «Добыть (2/3)» должно обновиться)
+        string newPrompt = hit?.GetPrompt();
+        if (!ReferenceEquals(hit, focus) || newPrompt != lastPrompt)
         {
             focus = hit;
-            GameEvents.RaisePromptChanged(focus?.GetPrompt());
+            lastPrompt = newPrompt;
+            GameEvents.RaisePromptChanged(newPrompt);
         }
     }
 }

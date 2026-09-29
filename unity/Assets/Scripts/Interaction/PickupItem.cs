@@ -8,7 +8,7 @@ public class PickupItem : MonoBehaviour, IInteractable
     [Min(1)] public int count = 1;
 
     public string GetPrompt()
-        => item != null ? $"Взять {item.displayName} ×{count}" : "Взять";
+        => item != null ? $"[E] Взять: {item.displayName} ×{count}" : "[E] Взять";
 
     public void Interact(Player player)
     {

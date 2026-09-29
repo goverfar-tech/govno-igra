@@ -75,17 +75,17 @@ public static class SetupMainScene
         // баланса сюда, потом перезапуск Setup.
         EnsureFolder("Assets/Items");
         var flaskEmpty = SyncItem("flask_empty", "Фляга (пустая)", 1, worldModel: "bottle");
-        SyncItem("flask", "Фляга (полная)", 1, water: 40f, consumeReturns: flaskEmpty);
+        var flask = SyncItem("flask", "Фляга (полная)", 1, water: 40f, consumeReturns: flaskEmpty);
         var wood = SyncItem("wood", "Древесина", 30, worldModel: "resource-wood");
         var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
         var berry = SyncItem("berry", "Ягода", 20, food: 12f);
-        SyncItem("meat", "Сырое мясо", 10, food: 25f);
+        var meat = SyncItem("meat", "Сырое мясо", 10, food: 25f);
         SyncItem("cooked_meat", "Жаркое", 10, food: 45f);
-        SyncItem("axe", "Каменный топор", 1, isTool: true, toolDamage: 8f, worldModel: "tool-axe");
-        SyncItem("pickaxe", "Кирка", 1, isTool: true, toolDamage: 5f, worldModel: "tool-pickaxe");
-        SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
-        SyncItem("campfire", "Костёр", 5, isPlaceable: true);
-        SyncItem("wall", "Деревянная стена", 10, isPlaceable: true);
+        var axe = SyncItem("axe", "Каменный топор", 1, isTool: true, toolDamage: 8f, worldModel: "tool-axe");
+        var pickaxe = SyncItem("pickaxe", "Кирка", 1, isTool: true, toolDamage: 5f, worldModel: "tool-pickaxe");
+        var spear = SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
+        var campfire = SyncItem("campfire", "Костёр", 5, isPlaceable: true);
+        var wall = SyncItem("wall", "Деревянная стена", 10, isPlaceable: true);
 
         // --- пикап-заготовка для дропа ---
         // (берём бревно как визуал дропа дерева)
@@ -104,6 +104,16 @@ public static class SetupMainScene
             Object.DestroyImmediate(pickupGo);
             pickupPrefabAsset = AssetDatabase.LoadAssetAtPath<PickupItem>("Assets/Prefabs/Pickup.prefab");
         }
+
+        // --- стартовый тайник у спауна: фляга, инструменты, еда ---
+        // (для M2-теста; при M4 всё это заменится находками в мире)
+        SpawnPickup(pickupPrefabAsset, flask, 1, new Vector3(1.5f, 0.3f, 2f));
+        SpawnPickup(pickupPrefabAsset, axe, 1, new Vector3(2.2f, 0.3f, 2.8f));
+        SpawnPickup(pickupPrefabAsset, pickaxe, 1, new Vector3(2.9f, 0.3f, 3.6f));
+        SpawnPickup(pickupPrefabAsset, spear, 1, new Vector3(3.6f, 0.3f, 4.4f));
+        SpawnPickup(pickupPrefabAsset, meat, 2, new Vector3(0.8f, 0.3f, 3f));
+        SpawnPickup(pickupPrefabAsset, campfire, 1, new Vector3(1.5f, 0.3f, 4f));
+        SpawnPickup(pickupPrefabAsset, wall, 3, new Vector3(0.3f, 0.3f, 4.2f));
 
         // --- дерево (добыча дерева) ---
         var tree = SpawnModel("tree", new Vector3(4f, 0f, -3f), "Tree", 3.2f);
@@ -299,6 +309,18 @@ public static class SetupMainScene
         model.transform.SetParent(root.transform, false);
         model.transform.localScale = Vector3.one * scale; // Kenney-модели мелкие, масштабы — как в Godot-версии
         return root;
+    }
+
+    // Подбираемый предмет на земле (пока все выглядят бревном-заглушкой)
+    static void SpawnPickup(PickupItem prefabComponent, ItemData item, int count, Vector3 pos)
+    {
+        if (prefabComponent == null || item == null) return;
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefabComponent.gameObject);
+        go.transform.position = pos;
+        go.name = "Pickup_" + item.id;
+        var pk = go.GetComponent<PickupItem>();
+        pk.item = item;
+        pk.count = count;
     }
 
     static void EnsureFolder(string path)

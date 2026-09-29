@@ -10,7 +10,7 @@ public class ResourceNode : MonoBehaviour, IInteractable
     public PickupItem pickupPrefab; // что спавним при добыче
 
     public string GetPrompt()
-        => yield != null ? $"Добыть {yield.displayName} ({hitsLeft})" : "Добыть";
+        => yield != null ? $"[E] Добыть: {yield.displayName} (осталось: {hitsLeft})" : "[E] Добыть";
 
     public void Interact(Player player)
     {

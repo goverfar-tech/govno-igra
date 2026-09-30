@@ -205,4 +205,49 @@ public static class ProceduralSfx
         }
         return MakeClip("sfx_death", f);
     }
+
+    // UI-шорошок: открытие панели «раскрывается» к верхам, закрытие —
+    // сворачивается вниз (меняется глубина ФНЧ по ходу клипа).
+    public static AudioClip MakeRustle(bool opening)
+    {
+        float dur = 0.11f;
+        int n = Mathf.RoundToInt(SampleRate * dur);
+        var f = new float[n];
+        float prev = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float u = (float)i / n;
+            float env = Mathf.Sin(u * Mathf.PI);
+            float a = opening ? Mathf.Lerp(0.75f, 0.2f, u) : Mathf.Lerp(0.2f, 0.75f, u);
+            prev = prev * a + White() * (1f - a);
+            f[i] = prev * env * 0.5f;
+        }
+        return MakeClip(opening ? "sfx_ui_open" : "sfx_ui_close", f);
+    }
+
+    // Треск костра: глухой «гул горения» + случайные деревянные щелчки
+    // (~26 в секунду, гаснут за миллисекунды). Петля, края сшиты кроссфейдом.
+    public static AudioClip MakeCrackle(float dur = 3.5f)
+    {
+        int n = Mathf.RoundToInt(SampleRate * dur);
+        var f = new float[n];
+        float bed = 0f, pop = 0f, popLp = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float white = White();
+            bed = bed * 0.985f + white * 0.015f;
+            if (Random.value < 0.0012f)
+                pop = Random.Range(0.5f, 1f) * (Random.value < 0.5f ? -1f : 1f);
+            pop *= 0.86f;
+            popLp = popLp * 0.55f + pop * 0.45f;
+            f[i] = bed * 0.4f + popLp * 0.5f;
+        }
+        const int xfade = 1024;
+        for (int i = 0; i < xfade; i++)
+        {
+            float a = (float)i / xfade;
+            f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a);
+        }
+        return MakeClip("sfx_crackle", f);
+    }
 }

@@ -58,6 +58,7 @@ public class Player : MonoBehaviour
     void Update()
     {
         placeCooldown -= Time.deltaTime;
+        swingCooldown -= Time.deltaTime;
         if (Stats.IsDead) return;
         if (!inputBlocked) Look();
         Move();
@@ -82,13 +83,35 @@ public class Player : MonoBehaviour
         if (wheel < 0f) Inventory.Select((Inventory.selected + Inventory.HotbarSize - 1) % Inventory.HotbarSize);
     }
 
-    // ЛКМ: постройка > расходник (Godot-эталон: player.gd use_selected_item)
+    // ЛКМ: постройка > инструмент (бой/добыча) > расходник
     void UseSelected()
     {
         var slot = Inventory.SelectedSlot;
         if (slot.IsEmpty) return;
         if (slot.item.isPlaceable && TryPlace(slot.item)) return;
+        if (slot.item.isTool && SwingTool(slot.item)) return;
         Inventory.UseSelected(this);
+    }
+
+    float swingCooldown;
+
+    // Замах инструментом: бьёт зомби на toolDamage, узлы добычи — на 2.
+    bool SwingTool(ItemData item)
+    {
+        if (swingCooldown > 0f) return true;
+        swingCooldown = 0.6f;
+
+        var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
+        if (Physics.Raycast(origin, (head != null ? head.forward : transform.forward),
+                out var hit, 3f, interactMask))
+        {
+            var zombie = hit.collider.GetComponentInParent<Zombie>();
+            if (zombie != null) { zombie.TakeDamage(item.toolDamage); return true; }
+
+            var node = hit.collider.GetComponentInParent<ResourceNode>();
+            if (node != null) { node.Hit(this, 2); return true; }
+        }
+        return true;
     }
 
     // Установить постройку на поверхность перед игроком (до 6 м).

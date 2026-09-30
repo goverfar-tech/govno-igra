@@ -12,13 +12,16 @@ public class ResourceNode : MonoBehaviour, IInteractable
     public string GetPrompt()
         => yield != null ? $"[E] Добыть: {yield.displayName} (осталось: {hitsLeft})" : "[E] Добыть";
 
-    public void Interact(Player player)
+    public void Interact(Player player) => Hit(player, 1);
+
+    // Удар по узлу; инструменты бьют сильнее (Godot-эталон: топор = 2).
+    public void Hit(Player player, int amount)
     {
         if (yield == null || player == null) return;
-        hitsLeft--;
+        hitsLeft -= amount;
 
         // Добыча сразу в инвентарь; не влезло — падает пикапом перед игроком
-        int leftover = player.Inventory.Add(yield, yieldPerHit);
+        int leftover = player.Inventory.Add(yield, yieldPerHit * amount);
         if (leftover > 0 && pickupPrefab != null)
         {
             var drop = Instantiate(pickupPrefab,

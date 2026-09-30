@@ -260,6 +260,12 @@ public static class SetupMainScene
         var berryMat = CreateMaterial("Berry", new Color(0.7f, 0.1f, 0.2f));
         berryGo.GetComponent<MeshRenderer>().sharedMaterial = berryMat;
 
+        // --- зомби-спавнер (M5): 3 зомби каждую ночь кольцом вокруг игрока ---
+        var spawnerGo = new GameObject("ZombieSpawner");
+        var spawner = spawnerGo.AddComponent<ZombieSpawner>();
+        spawner.dropItem = meat; // с зомби падает сырая плоть
+        spawner.pickupPrefab = pickupPrefabAsset;
+
         // --- сохранить сцену и добавить в Build Settings ---
         EnsureFolder("Assets/Scenes");
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Main.unity");

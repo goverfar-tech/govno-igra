@@ -14,6 +14,7 @@ public class DebugHud : MonoBehaviour
     float toastUntil;
     bool dead;
     bool panelOpen;
+    int carried = -1; // слот, который «держим» мышкой для переноса
 
     void OnEnable()
     {
@@ -31,6 +32,20 @@ public class DebugHud : MonoBehaviour
 
     void OnPrompt(string p) => prompt = p;
     void OnNotify(string text) { toast = text; toastUntil = Time.time + 3f; }
+
+    // Клик по слоту: взять / положить / домержить одинаковые / свапнуть.
+    void ClickSlot(int i)
+    {
+        if (inventory == null) return;
+        if (carried < 0)
+        {
+            if (!inventory.slots[i].IsEmpty) carried = i;
+            return;
+        }
+        if (i == carried) { carried = -1; return; }
+        inventory.MoveOrMerge(carried, i);
+        carried = -1;
+    }
     void OnDeath()
     {
         dead = true;
@@ -43,6 +58,7 @@ public class DebugHud : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Tab))
         {
             panelOpen = !panelOpen;
+            if (!panelOpen) carried = -1;
             GameEvents.RaiseInventoryOpenChanged(panelOpen);
         }
         if (dead && Input.GetKeyDown(KeyCode.R))
@@ -83,18 +99,20 @@ public class DebugHud : MonoBehaviour
         // полный инвентарь по Tab (стопгап до uGUI-HUD в M3)
         if (panelOpen && inventory != null)
         {
-            GUI.Box(new Rect(Screen.width / 2f - 260, 100, 520, 200), "Инвентарь (Tab)");
+            GUI.Box(new Rect(Screen.width / 2f - 260, 100, 520, 230), "Инвентарь (Tab)");
             for (int i = 0; i < Inventory.Size; i++)
             {
                 var s = inventory.slots[i];
                 string cell = s.IsEmpty ? "—" : $"{s.item.displayName} ×{s.count}";
+                if (i == inventory.selected) cell = ">" + cell;
+                if (i == carried) cell = "*" + cell + "*";
                 float x = Screen.width / 2f - 240 + (i % 4) * 125f;
                 float yy = 135 + (i / 4) * 28f;
-                GUI.Label(new Rect(x, yy, 125, 24),
-                    i == inventory.selected ? $"[{cell}]" : cell, style);
+                if (GUI.Button(new Rect(x, yy, 120, 24), cell))
+                    ClickSlot(i);
             }
-            GUI.Label(new Rect(Screen.width / 2f - 240, 290, 500, 24),
-                "ПКМ — выбросить активный слот", style);
+            GUI.Label(new Rect(Screen.width / 2f - 240, 300, 500, 24),
+                "ЛКМ по слоту — взять/положить  •  ПКМ (панель закрыта) — выбросить", style);
         }
 
         if (Time.time < toastUntil)

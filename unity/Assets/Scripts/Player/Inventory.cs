@@ -114,6 +114,38 @@ public class Inventory : MonoBehaviour
         GameEvents.RaiseInventoryChanged();
     }
 
+    // Перенос слота: одноимённые домерживаются до maxStack,
+    // разные — свапаются. Пустая цель просто принимает всё.
+    public void MoveOrMerge(int from, int to)
+    {
+        if (from == to) return;
+        var a = slots[from];
+        var b = slots[to];
+        bool merge = !b.IsEmpty && a.item == b.item;
+
+        if (merge)
+        {
+            int move = Mathf.Min(a.count, a.item.maxStack - b.count);
+            b.count += move;
+            a.count -= move;
+            if (a.count <= 0) { a.item = null; a.count = 0; }
+        }
+        else
+        {
+            (a.item, b.item) = (b.item, a.item);
+            (a.count, b.count) = (b.count, a.count);
+        }
+
+        // активность хотбара переезжает вместе с вещами
+        // (при частичном мерже хвост остаётся на исходном слоте)
+        if (selected == from && (!merge || slots[from].IsEmpty))
+        {
+            selected = to;
+            GameEvents.RaiseSelectionChanged();
+        }
+        GameEvents.RaiseInventoryChanged();
+    }
+
     public void Select(int index)
     {
         index = Mathf.Clamp(index, 0, HotbarSize - 1);

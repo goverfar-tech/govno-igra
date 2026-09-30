@@ -32,6 +32,7 @@ public class Player : MonoBehaviour
     float pitch;
     float verticalVel;
     float placeCooldown;
+    bool inputBlocked;              // открыта панель инвентаря
     IInteractable focus;
     string lastPrompt;
 
@@ -44,12 +45,22 @@ public class Player : MonoBehaviour
         Cursor.visible = false;
     }
 
+    void OnEnable() => GameEvents.InventoryOpenChanged += OnInventoryOpen;
+    void OnDisable() => GameEvents.InventoryOpenChanged -= OnInventoryOpen;
+    void OnInventoryOpen(bool open)
+    {
+        inputBlocked = open;
+        Cursor.lockState = open ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = open;
+    }
+
     void Update()
     {
         placeCooldown -= Time.deltaTime;
         if (Stats.IsDead) return;
-        Look();
+        if (!inputBlocked) Look();
         Move();
+        if (inputBlocked) return; // панель открыта — мышь работает по UI, не по миру
         UpdateInteractFocus();
 
         if (Input.GetKeyDown(KeyCode.E) && focus != null)

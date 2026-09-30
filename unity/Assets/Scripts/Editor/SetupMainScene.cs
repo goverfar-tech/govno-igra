@@ -28,13 +28,20 @@ public static class SetupMainScene
         var oldCam = GameObject.Find("Main Camera");
         if (oldCam != null) Object.DestroyImmediate(oldCam);
 
-        // --- земля ---
-        var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-        ground.name = "Ground";
-        ground.transform.position = Vector3.zero;
-        ground.transform.localScale = new Vector3(20f, 1f, 20f); // 200×200 м
-        var groundMat = CreateMaterial("Ground", new Color(0.35f, 0.5f, 0.25f));
-        ground.GetComponent<MeshRenderer>().sharedMaterial = groundMat;
+        // --- террейн: рельеф по шуму вместо плоскости (M4) ---
+        EnsureFolder("Assets/Terrain");
+        string terrainPath = "Assets/Terrain/TerrainMesh.asset";
+        var terrainMesh = AssetDatabase.LoadAssetAtPath<Mesh>(terrainPath);
+        if (terrainMesh == null)
+        {
+            terrainMesh = TerrainGen.BuildMesh(100);
+            AssetDatabase.CreateAsset(terrainMesh, terrainPath);
+        }
+        var ground = new GameObject("Terrain");
+        ground.AddComponent<MeshFilter>().sharedMesh = terrainMesh;
+        ground.AddComponent<MeshRenderer>().sharedMaterial =
+            CreateMaterial("Ground", new Color(0.35f, 0.5f, 0.25f));
+        ground.AddComponent<MeshCollider>().sharedMesh = terrainMesh;
 
         // --- солнце + день/ночь ---
         var sun = GameObject.Find("Directional Light")?.GetComponent<Light>();
@@ -48,7 +55,7 @@ public static class SetupMainScene
         // --- игрок ---
         var playerGo = GameObject.CreatePrimitive(PrimitiveType.Capsule);
         playerGo.name = "Player";
-        playerGo.transform.position = new Vector3(0f, 1.1f, 0f);
+        playerGo.transform.position = new Vector3(0f, TerrainGen.HeightAt(0f, 0f) + 1.1f, 0f);
 
         var capsuleCol = playerGo.GetComponent<CapsuleCollider>();
         if (capsuleCol != null) Object.DestroyImmediate(capsuleCol);
@@ -119,17 +126,79 @@ public static class SetupMainScene
 
         // --- стартовый тайник у спауна: фляга, инструменты, еда ---
         // (для M2-теста; при M4 всё это заменится находками в мире)
-        SpawnPickup(pickupPrefabAsset, flask, 1, new Vector3(1.5f, 0.3f, 2f));
-        SpawnPickup(pickupPrefabAsset, axe, 1, new Vector3(2.2f, 0.3f, 2.8f));
-        SpawnPickup(pickupPrefabAsset, pickaxe, 1, new Vector3(2.9f, 0.3f, 3.6f));
-        SpawnPickup(pickupPrefabAsset, spear, 1, new Vector3(3.6f, 0.3f, 4.4f));
-        SpawnPickup(pickupPrefabAsset, meat, 2, new Vector3(0.8f, 0.3f, 3f));
-        SpawnPickup(pickupPrefabAsset, campfire, 1, new Vector3(1.5f, 0.3f, 4f));
-        SpawnPickup(pickupPrefabAsset, wall, 3, new Vector3(0.3f, 0.3f, 4.2f));
+        SpawnPickup(pickupPrefabAsset, flask, 1, OnGround(1.5f, 2f, 0.3f));
+        SpawnPickup(pickupPrefabAsset, axe, 1, OnGround(2.2f, 2.8f, 0.3f));
+        SpawnPickup(pickupPrefabAsset, pickaxe, 1, OnGround(2.9f, 3.6f, 0.3f));
+        SpawnPickup(pickupPrefabAsset, spear, 1, OnGround(3.6f, 4.4f, 0.3f));
+        SpawnPickup(pickupPrefabAsset, meat, 2, OnGround(0.8f, 3f, 0.3f));
+        SpawnPickup(pickupPrefabAsset, campfire, 1, OnGround(1.5f, 4f, 0.3f));
+        SpawnPickup(pickupPrefabAsset, wall, 3, OnGround(0.3f, 4.2f, 0.3f));
 
-        // --- дерево (добыча дерева) ---
-        var tree = SpawnModel("tree", new Vector3(4f, 0f, -3f), "Tree", 3.2f);
-        if (tree == null) tree = SpawnModel("tree-tall", new Vector3(4f, 0f, -3f), "Tree", 3.2f);
+        // --- мир M4: рассеивание по seed + озеро ---
+        var rng = new System.Random(1337);
+
+        // деревья (30 шт, все добываемые)
+        for (int i = 0; i < 30; i++)
+        {
+            var t = SpawnModel(i % 3 == 0 ? "tree-tall" : "tree", RandomPos(rng, 14f, 90f),
+                "Tree" + i, 2.6f + (float)rng.NextDouble() * 0.8f);
+            if (t == null) { if (i == 0) missing.AppendLine("scatter trees"); continue; }
+            var tc = t.AddComponent<CapsuleCollider>();
+            tc.center = new Vector3(0f, 1.3f, 0f);
+            tc.height = 2.6f;
+            tc.radius = 0.3f;
+            var tn = t.AddComponent<ResourceNode>();
+            tn.yield = wood; tn.hitsLeft = 3; tn.pickupPrefab = pickupPrefabAsset;
+        }
+
+        // камни (12 шт)
+        string[] rockModels = { "rock-a", "rock-b", "rock-c" };
+        for (int i = 0; i < 12; i++)
+        {
+            var r = SpawnModel(rockModels[i % 3], RandomPos(rng, 14f, 90f),
+                "Rock" + i, 1.5f + (float)rng.NextDouble() * 0.7f);
+            if (r == null) continue;
+            var rc = r.AddComponent<BoxCollider>();
+            rc.center = new Vector3(0f, 0.5f, 0f);
+            rc.size = new Vector3(1.2f, 1f, 1.2f);
+            var rn = r.AddComponent<ResourceNode>();
+            rn.yield = stone; rn.hitsLeft = 3; rn.pickupPrefab = pickupPrefabAsset;
+        }
+
+        // ягодные кусты (10 шт, пикап ягоды на кусте)
+        for (int i = 0; i < 10; i++)
+        {
+            var b = SpawnModel("grass-large", RandomPos(rng, 10f, 80f), "Bush" + i, 2f);
+            if (b == null) continue;
+            var bc = b.AddComponent<SphereCollider>();
+            bc.isTrigger = true; // куст не блокирует движение
+            bc.center = new Vector3(0f, 0.5f, 0f);
+            bc.radius = 0.9f;
+            var bp = b.AddComponent<PickupItem>();
+            bp.item = berry;
+            bp.count = 2;
+        }
+
+        // озеро: вода + наполнение фляги
+        float lakeY = TerrainGen.HeightAt(TerrainGen.LakeCenter.x, TerrainGen.LakeCenter.y);
+        var water = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        water.name = "Lake";
+        water.transform.position = new Vector3(TerrainGen.LakeCenter.x, lakeY + 1.2f, TerrainGen.LakeCenter.y);
+        water.transform.localScale = new Vector3(TerrainGen.LakeRadius * 1.6f, 0.05f, TerrainGen.LakeRadius * 1.6f);
+        water.GetComponent<MeshRenderer>().sharedMaterial =
+            CreateMaterial("Water", new Color(0.2f, 0.4f, 0.55f));
+        var waterCol = water.GetComponent<CapsuleCollider>();
+        if (waterCol != null) Object.DestroyImmediate(waterCol);
+        var waterTrigger = water.AddComponent<SphereCollider>();
+        waterTrigger.isTrigger = true;
+        waterTrigger.radius = 9f;
+        var waterSource = water.AddComponent<WaterSource>();
+        waterSource.emptyFlask = flaskEmpty;
+        waterSource.fullFlask = flask;
+
+        // --- демо-узел у спауна (дублирует рассеивание, для быстрого теста) ---
+        var tree = SpawnModel("tree", new Vector3(4f, TerrainGen.HeightAt(4f, -3f), -3f), "Tree", 3.2f);
+        if (tree == null) tree = SpawnModel("tree-tall", OnGround(4f, -3f), "Tree", 3.2f);
         if (tree != null)
         {
             var col = tree.AddComponent<CapsuleCollider>();
@@ -144,8 +213,8 @@ public static class SetupMainScene
         else missing.AppendLine("tree / tree-tall");
 
         // --- камень-жилка ---
-        var rock = SpawnModel("resource-stone-large", new Vector3(-4f, 0f, 2f), "StoneNode", 1.8f);
-        if (rock == null) rock = SpawnModel("rock-a", new Vector3(-4f, 0f, 2f), "StoneNode", 1.8f);
+        var rock = SpawnModel("resource-stone-large", OnGround(-4f, 2f), "StoneNode", 1.8f);
+        if (rock == null) rock = SpawnModel("rock-a", OnGround(-4f, 2f), "StoneNode", 1.8f);
         if (rock != null)
         {
             var col = rock.AddComponent<BoxCollider>();
@@ -158,51 +227,19 @@ public static class SetupMainScene
         }
         else missing.AppendLine("resource-stone-large / rock-a");
 
-        // --- декорации: деревья и камни кольцом, ВСЕ добываемые ---
-        for (int i = 0; i < 8; i++)
-        {
-            float angle = i * Mathf.PI * 2f / 8f;
-            var pos = new Vector3(Mathf.Cos(angle) * (10f + i), 0f, Mathf.Sin(angle) * (10f + i));
-            var t = SpawnModel(i % 2 == 0 ? "tree" : "tree-tall", pos, "Tree" + i, 3f);
-            if (t == null)
-            {
-                if (i == 0) missing.AppendLine("decor trees");
-                continue;
-            }
-            var tc = t.AddComponent<CapsuleCollider>();
-            tc.center = new Vector3(0f, 1.3f, 0f);
-            tc.height = 2.6f;
-            tc.radius = 0.3f;
-            var tn = t.AddComponent<ResourceNode>();
-            tn.yield = wood;
-            tn.hitsLeft = 3;
-            tn.pickupPrefab = pickupPrefabAsset;
-        }
-        for (int i = 0; i < 3; i++)
-        {
-            var r = SpawnModel(new[] { "rock-a", "rock-b", "rock-c" }[i], new Vector3(-8f + i * 3f, 0f, -8f), "Rock" + i, 1.8f);
-            if (r == null) continue;
-            var rc = r.AddComponent<BoxCollider>();
-            rc.center = new Vector3(0f, 0.5f, 0f);
-            rc.size = new Vector3(1.2f, 1f, 1.2f);
-            var rn = r.AddComponent<ResourceNode>();
-            rn.yield = stone;
-            rn.hitsLeft = 3;
-            rn.pickupPrefab = pickupPrefabAsset;
-        }
 
         // --- куст ягод (пикап ягоды рядом) ---
-        if (SpawnModel("grass-large", new Vector3(2f, 0f, 4f), "Bush", 2f) == null)
+        if (SpawnModel("grass-large", OnGround(2f, 4f), "Bush", 2f) == null)
         {
             // модель травы не нашлась — заменяем зелёным кустом-примитивом
             var bush = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             bush.name = "Bush";
-            bush.transform.position = new Vector3(2f, 0.4f, 4f);
+            bush.transform.position = OnGround(2f, 4f, 0.4f);
             bush.transform.localScale = Vector3.one * 0.8f;
             Object.DestroyImmediate(bush.GetComponent<SphereCollider>());
             bush.GetComponent<MeshRenderer>().sharedMaterial = CreateMaterial("Bush", new Color(0.2f, 0.45f, 0.15f));
         }
-        var berryPos = new Vector3(2f, 0.5f, 4f);
+        var berryPos = OnGround(2f, 4f, 0.5f);
         var berryGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         berryGo.name = "BerryPickup";
         berryGo.transform.position = berryPos;
@@ -312,6 +349,25 @@ public static class SetupMainScene
     // Возвращает НЕмасштабированный корень-обёртку; модель — ребёнок
     // с localScale=scale (как в Godot: коллайдеры на корне не растут
     // вместе с моделью, иначе капсула дерева становится ~1 м толщиной).
+    // Точка на рельефе (x, z) с подъёмом на up над поверхностью.
+    static Vector3 OnGround(float x, float z, float up = 0f)
+        => new Vector3(x, TerrainGen.HeightAt(x, z) + up, z);
+
+    // Случайная точка кольца вокруг спауна, прочь от озера (seed → rng).
+    static Vector3 RandomPos(System.Random rng, float minR, float maxR)
+    {
+        for (int tries = 0; tries < 32; tries++)
+        {
+            float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+            float r = Mathf.Lerp(minR, maxR, (float)rng.NextDouble());
+            float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
+            if (Vector2.Distance(new Vector2(x, z), TerrainGen.LakeCenter) < TerrainGen.LakeRadius + 2f)
+                continue;
+            return OnGround(x, z);
+        }
+        return OnGround(minR, 0f);
+    }
+
     static GameObject SpawnModel(string name, Vector3 pos, string goName, float scale = 1f)
     {
         var prefab = LoadModel(name);

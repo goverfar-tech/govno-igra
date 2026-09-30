@@ -79,6 +79,15 @@ public class Inventory : MonoBehaviour
         if (returned != null) Add(returned, 1);
     }
 
+    // Сколько штук предмета есть суммарно по всем слотам.
+    public int CountOf(ItemData item)
+    {
+        int n = 0;
+        foreach (var s in slots)
+            if (!s.IsEmpty && s.item == item) n += s.count;
+        return n;
+    }
+
     // Убрать из инвентаря count штук предмета; false — если столько нет.
     public bool RemoveItem(ItemData item, int count)
     {

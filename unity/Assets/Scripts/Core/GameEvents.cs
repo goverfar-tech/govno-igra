@@ -25,4 +25,19 @@ public static class GameEvents
     public static void RaiseStatsChanged() => StatsChanged?.Invoke();
     public static void RaisePlayerDied() => PlayerDied?.Invoke();
     public static void RaiseTimeOfDayChanged(float t, bool isNight) => TimeOfDayChanged?.Invoke(t, isNight);
+
+    // Добавлено на M3 (HUD):
+    // Пауза по Esc: true — игра на паузе (Time.timeScale == 0)
+    public static event Action<bool> PauseChanged;
+    public static void RaisePauseChanged(bool paused) => PauseChanged?.Invoke(paused);
+
+    // --- Аудио-хуки (добавлено Потоком Б «звук»; новые события — только сюда, в конец) ---
+    // Израсходован предмет (еда/питьё) — звук потребления.
+    // Поднимать там, где предмет тратится (Inventory.UseSelected).
+    public static event Action<ItemData> ItemConsumed;
+    // Удар инструментом по мировому объекту (добыча/бой) — 3D-«тук» в точке.
+    public static event Action<UnityEngine.Vector3> WorldHit;
+
+    public static void RaiseItemConsumed(ItemData item) => ItemConsumed?.Invoke(item);
+    public static void RaiseWorldHit(UnityEngine.Vector3 pos) => WorldHit?.Invoke(pos);
 }

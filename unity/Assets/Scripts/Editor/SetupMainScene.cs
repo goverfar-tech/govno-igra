@@ -12,6 +12,13 @@ public static class SetupMainScene
     [MenuItem("Survival/Setup Main Scene")]
     public static void Run()
     {
+        if (EditorApplication.isPlaying)
+        {
+            EditorUtility.DisplayDialog("Survival",
+                "Сначала выйди из Play-режима, потом запускай Setup.", "Ок");
+            return;
+        }
+
         var missing = new System.Text.StringBuilder();
 
         // --- сцена ---
@@ -108,7 +115,7 @@ public static class SetupMainScene
             Object.DestroyImmediate(pickupGo);
             pickupPrefabAsset = AssetDatabase.LoadAssetAtPath<PickupItem>("Assets/Prefabs/Pickup.prefab");
         }
-        player.Inventory.pickupPrefab = pickupPrefabAsset; // для выброса по ПКМ
+        playerGo.GetComponent<Inventory>().pickupPrefab = pickupPrefabAsset; // для выброса по ПКМ
 
         // --- стартовый тайник у спауна: фляга, инструменты, еда ---
         // (для M2-теста; при M4 всё это заменится находками в мире)

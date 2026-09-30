@@ -32,11 +32,11 @@ public static class SetupMainScene
         EnsureFolder("Assets/Terrain");
         string terrainPath = "Assets/Terrain/TerrainMesh.asset";
         var terrainMesh = AssetDatabase.LoadAssetAtPath<Mesh>(terrainPath);
-        if (terrainMesh == null)
-        {
-            terrainMesh = TerrainGen.BuildMesh(100);
-            AssetDatabase.CreateAsset(terrainMesh, terrainPath);
-        }
+        bool isNewMesh = terrainMesh == null;
+        if (isNewMesh) terrainMesh = new Mesh { name = "Terrain" };
+        TerrainGen.FillMesh(terrainMesh, 130); // ~1.5 м на ячейку — капсула не «проваливается»
+        if (isNewMesh) AssetDatabase.CreateAsset(terrainMesh, terrainPath);
+        else EditorUtility.SetDirty(terrainMesh);
         var ground = new GameObject("Terrain");
         ground.AddComponent<MeshFilter>().sharedMesh = terrainMesh;
         ground.AddComponent<MeshRenderer>().sharedMaterial =
@@ -281,7 +281,14 @@ public static class SetupMainScene
         ItemData consumeReturns = null, bool isTool = false, float toolDamage = 0f,
         bool isPlaceable = false, string worldModel = null, GameObject placeablePrefab = null)
     {
-        string path = $"Assets/Items/{id}.asset";
+        // Предметы живут в Resources/Items — SaveSystem грузит их по id
+        // рантаймом. Старые ассеты из Assets/Items переносим, не создавая дублей.
+        EnsureFolder("Assets/Resources/Items");
+        string path = $"Assets/Resources/Items/{id}.asset";
+        string oldPath = $"Assets/Items/{id}.asset";
+        if (AssetDatabase.LoadAssetAtPath<ItemData>(path) == null
+            && AssetDatabase.LoadAssetAtPath<ItemData>(oldPath) != null)
+            AssetDatabase.MoveAsset(oldPath, path);
         var item = AssetDatabase.LoadAssetAtPath<ItemData>(path);
         bool created = item == null;
         if (created) item = ScriptableObject.CreateInstance<ItemData>();

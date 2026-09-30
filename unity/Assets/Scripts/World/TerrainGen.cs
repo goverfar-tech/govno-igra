@@ -33,9 +33,11 @@ public static class TerrainGen
     }
 
     // res×res квадратов; вершины в локальных координатах, центр в (0,0).
-    public static Mesh BuildMesh(int res = 100)
+    // Заполняет переданный меш — так существующий ассет можно
+    // перестраивать (меняем детализацию без потери ссылок в сцене).
+    public static void FillMesh(Mesh mesh, int res)
     {
-        var mesh = new Mesh { name = "Terrain" };
+        mesh.Clear();
         int side = res + 1;
         var verts = new Vector3[side * side];
         var uvs = new Vector2[side * side];
@@ -65,6 +67,5 @@ public static class TerrainGen
         mesh.triangles = tris;
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
-        return mesh;
     }
 }

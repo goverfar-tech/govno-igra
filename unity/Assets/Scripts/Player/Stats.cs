@@ -55,6 +55,15 @@ public class Stats : MonoBehaviour
         GameEvents.RaiseStatsChanged();
     }
 
+    // Проставить значения из сохранения (SaveSystem).
+    public void SetState(float hp, float food, float water)
+    {
+        Hp = Mathf.Clamp(hp, 0f, maxHp);
+        Food = Mathf.Clamp(food, 0f, maxFood);
+        Water = Mathf.Clamp(water, 0f, maxWater);
+        GameEvents.RaiseStatsChanged();
+    }
+
     public void Eat(float food, float water, float heal)
     {
         if (IsDead) return;

@@ -27,6 +27,7 @@ public class Player : MonoBehaviour
 
     public Inventory Inventory { get; private set; }
     public Stats Stats { get; private set; }
+    public float Pitch => pitch;
 
     CharacterController cc;
     float pitch;
@@ -110,8 +111,28 @@ public class Player : MonoBehaviour
         var placed = Instantiate(item.placeablePrefab, hit.point,
             Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
         placed.name = item.displayName;
+        var tag = placed.GetComponent<Placed>();   // метка для SaveSystem
+        if (tag == null) tag = placed.AddComponent<Placed>();
+        tag.itemId = item.id;
         GameEvents.RaiseNotify("Построено: " + item.displayName);
         return true;
+    }
+
+    // Телепорт с отключением CharacterController (SaveSystem).
+    public void Teleport(Vector3 pos)
+    {
+        cc.enabled = false;
+        transform.position = pos;
+        cc.enabled = true;
+        verticalVel = 0f;
+    }
+
+    // Установить взгляд из сохранения.
+    public void ApplyView(float yaw, float newPitch)
+    {
+        transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+        pitch = newPitch;
+        if (head != null) head.localEulerAngles = new Vector3(pitch, 0f, 0f);
     }
 
     void Look()

@@ -10,18 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8c29483580bda2740b8baec155cab3ee, type: 3}
-  m_Name: stone
+  m_Name: wall
   m_EditorClassIdentifier: 
-  id: stone
-  displayName: "\u041A\u0430\u043C\u0435\u043D\u044C"
-  maxStack: 30
+  id: wall
+  displayName: "\u0414\u0435\u0440\u0435\u0432\u044F\u043D\u043D\u0430\u044F \u0441\u0442\u0435\u043D\u0430"
+  maxStack: 10
   icon: {fileID: 0}
-  worldModel: {fileID: 5935661697136641324, guid: 1eb155b619f7b2041ae6e3378c59d106, type: 3}
+  worldModel: {fileID: 0}
   foodRestore: 0
   waterRestore: 0
   healAmount: 0
   consumeReturns: {fileID: 0}
   isTool: 0
   toolDamage: 0
-  isPlaceable: 0
-  placeablePrefab: {fileID: 0}
+  isPlaceable: 1
+  placeablePrefab: {fileID: 9063326012590725829, guid: a1675ecea33d7014b99ab7610f28ecc0, type: 3}

@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8c29483580bda2740b8baec155cab3ee, type: 3}
-  m_Name: stone
+  m_Name: flask
   m_EditorClassIdentifier: 
-  id: stone
-  displayName: "\u041A\u0430\u043C\u0435\u043D\u044C"
-  maxStack: 30
+  id: flask
+  displayName: "\u0424\u043B\u044F\u0433\u0430 (\u043F\u043E\u043B\u043D\u0430\u044F)"
+  maxStack: 1
   icon: {fileID: 0}
-  worldModel: {fileID: 5935661697136641324, guid: 1eb155b619f7b2041ae6e3378c59d106, type: 3}
+  worldModel: {fileID: 0}
   foodRestore: 0
-  waterRestore: 0
+  waterRestore: 40
   healAmount: 0
-  consumeReturns: {fileID: 0}
+  consumeReturns: {fileID: 11400000, guid: 845f4412bbebe5e4093e9b2302c57b68, type: 2}
   isTool: 0
   toolDamage: 0
   isPlaceable: 0

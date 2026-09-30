@@ -10,18 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8c29483580bda2740b8baec155cab3ee, type: 3}
-  m_Name: stone
+  m_Name: pickaxe
   m_EditorClassIdentifier: 
-  id: stone
-  displayName: "\u041A\u0430\u043C\u0435\u043D\u044C"
-  maxStack: 30
+  id: pickaxe
+  displayName: "\u041A\u0438\u0440\u043A\u0430"
+  maxStack: 1
   icon: {fileID: 0}
-  worldModel: {fileID: 5935661697136641324, guid: 1eb155b619f7b2041ae6e3378c59d106, type: 3}
+  worldModel: {fileID: 744104396584420424, guid: f23e4a9f1bd0208429991cd14ff84776, type: 3}
   foodRestore: 0
   waterRestore: 0
   healAmount: 0
   consumeReturns: {fileID: 0}
-  isTool: 0
-  toolDamage: 0
+  isTool: 1
+  toolDamage: 5
   isPlaceable: 0
   placeablePrefab: {fileID: 0}

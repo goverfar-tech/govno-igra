@@ -181,18 +181,26 @@ public static class SetupMainScene
 
         // озеро: вода + наполнение фляги
         float lakeY = TerrainGen.HeightAt(TerrainGen.LakeCenter.x, TerrainGen.LakeCenter.y);
+        var lake = new GameObject("Lake");
+        lake.transform.position = new Vector3(TerrainGen.LakeCenter.x, lakeY + 1.2f, TerrainGen.LakeCenter.y);
+
         var water = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        water.name = "Lake";
-        water.transform.position = new Vector3(TerrainGen.LakeCenter.x, lakeY + 1.2f, TerrainGen.LakeCenter.y);
+        water.name = "Surface";
+        water.transform.SetParent(lake.transform, false);
         water.transform.localScale = new Vector3(TerrainGen.LakeRadius * 1.6f, 0.05f, TerrainGen.LakeRadius * 1.6f);
         water.GetComponent<MeshRenderer>().sharedMaterial =
             CreateMaterial("Water", new Color(0.2f, 0.4f, 0.55f));
         var waterCol = water.GetComponent<CapsuleCollider>();
         if (waterCol != null) Object.DestroyImmediate(waterCol);
-        var waterTrigger = water.AddComponent<SphereCollider>();
-        waterTrigger.isTrigger = true;
-        waterTrigger.radius = 9f;
-        var waterSource = water.AddComponent<WaterSource>();
+
+        // зона взаимодействия: тонкий немасштабированный бокс на уровне воды
+        // (луч не попадает в триггер, стартуя изнутри него, поэтому НЕ
+        // trigger — «стоять на воде» у кромки выглядит как мелководье)
+        var zone = new GameObject("InteractZone");
+        zone.transform.SetParent(lake.transform, false);
+        var zoneCol = zone.AddComponent<BoxCollider>();
+        zoneCol.size = new Vector3(14f, 0.2f, 14f);
+        var waterSource = zone.AddComponent<WaterSource>();
         waterSource.emptyFlask = flaskEmpty;
         waterSource.fullFlask = flask;
 

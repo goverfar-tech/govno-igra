@@ -12,18 +12,27 @@ public class ZombieSpawner : MonoBehaviour
     public PickupItem pickupPrefab;
 
     static readonly List<Zombie> alive = new List<Zombie>();
+    bool wasNight;
 
     void OnEnable() => GameEvents.TimeOfDayChanged += OnTime;
     void OnDisable() => GameEvents.TimeOfDayChanged -= OnTime;
 
     void OnTime(float t, bool night)
     {
-        if (!night) return;
+        // Событие идёт КАЖДЫЙ кадр — спавним только на фронте ночи,
+        // иначе за ночь заспавнятся тысячи.
+        if (!night) { wasNight = false; return; }
+        if (wasNight) return;
+        wasNight = true;
+
         var player = FindFirstObjectByType<Player>();
         if (player == null) return;
         alive.RemoveAll(z => z == null);
+        int cap = Mathf.Max(perNight * 2, 6); // предохранитель от нашествия
+        int toSpawn = Mathf.Min(perNight, cap - alive.Count);
+        if (toSpawn <= 0) return;
 
-        for (int i = 0; i < perNight; i++)
+        for (int i = 0; i < toSpawn; i++)
         {
             float ang = Random.value * Mathf.PI * 2f;
             float r = Random.Range(minDist, maxDist);

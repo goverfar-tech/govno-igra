@@ -21,6 +21,11 @@ public class Stats : MonoBehaviour
     public float regenMinStat = 70f;
     public float regenRate = 0.5f;       // HP/сек
 
+    // Тепло костра: Campfire ставит Time.time, пока игрок рядом.
+    // Пока метка свежая — ночной множитель расхода не работает.
+    [System.NonSerialized] public float lastWarmTime = -10f;
+    const float WarmWindowSec = 1f;
+
     public float Hp { get; private set; }
     public float Food { get; private set; }
     public float Water { get; private set; }
@@ -41,8 +46,9 @@ public class Stats : MonoBehaviour
     public void Tick(float dt, bool sprinting)
     {
         if (IsDead) return;
+        bool warm = Time.time - lastWarmTime < WarmWindowSec;
         float mult = (sprinting ? sprintDrainMultiplier : 1f)
-                   * (isNight ? nightDrainMultiplier : 1f);
+                   * (isNight && !warm ? nightDrainMultiplier : 1f);
         Food = Mathf.Max(0f, Food - foodDrain * mult * dt);
         Water = Mathf.Max(0f, Water - waterDrain * mult * dt);
 

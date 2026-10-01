@@ -102,4 +102,52 @@ public static class UiWidgets
         rt.offsetMin = new Vector2(marginX, marginY);
         rt.offsetMax = new Vector2(-marginX, -marginY);
     }
+
+    // Слайдер настроек (фон/заливка/ручка). Fill и handle — как в
+    // стандартном шаблоне uGUI, чтобы Slider мог двигать их якоря.
+    public static Slider MakeSlider(Transform parent, string name, float min, float max, float value)
+    {
+        var go = new GameObject(name, typeof(RectTransform), typeof(Slider));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.sizeDelta = new Vector2(200f, 20f);
+
+        var bg = Panel(rt, "Background", BarBackColor);
+        Stretch(bg.rectTransform, 0f, 8f);
+        bg.raycastTarget = false;
+
+        var fillArea = new GameObject("Fill Area", typeof(RectTransform));
+        var faRt = (RectTransform)fillArea.transform;
+        faRt.SetParent(rt, false);
+        Stretch(faRt, 4f, 9f);
+
+        var fill = Panel(faRt, "Fill", new Color(0.52f, 0.52f, 0.46f, 0.9f));
+        fill.raycastTarget = false;
+        var fillRt = fill.rectTransform;
+        fillRt.anchorMin = Vector2.zero;
+        fillRt.anchorMax = new Vector2(0f, 1f);
+        fillRt.offsetMin = Vector2.zero;
+        fillRt.offsetMax = Vector2.zero;
+
+        var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+        var haRt = (RectTransform)handleArea.transform;
+        haRt.SetParent(rt, false);
+        Stretch(haRt, 8f, 0f);
+
+        var handle = Panel(haRt, "Handle", new Color(0.85f, 0.85f, 0.8f, 1f));
+        var hRt = handle.rectTransform;
+        hRt.anchorMin = Vector2.zero;
+        hRt.anchorMax = new Vector2(0f, 1f);
+        hRt.sizeDelta = new Vector2(14f, 0f);
+
+        var slider = go.GetComponent<Slider>();
+        slider.fillRect = fillRt;
+        slider.handleRect = hRt;
+        slider.targetGraphic = handle;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = min;
+        slider.maxValue = max;
+        slider.SetValueWithoutNotify(value); // стартовое значение — без side-эффектов
+        return slider;
+    }
 }

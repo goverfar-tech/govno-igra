@@ -419,7 +419,18 @@ public static class SetupMainScene
         EnsureFolder("Assets/Prefabs/Placeables");
         string path = "Assets/Prefabs/Placeables/Campfire.prefab";
         var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        if (existing != null) return existing;
+        if (existing != null)
+        {
+            // префаб мог быть создан до появления Campfire.cs — довешиваем
+            if (existing.GetComponent<Campfire>() == null)
+            {
+                var rootGo = PrefabUtility.LoadPrefabContents(path);
+                rootGo.AddComponent<Campfire>();
+                existing = PrefabUtility.SaveAsPrefabAsset(rootGo, path);
+                PrefabUtility.UnloadPrefabContents(rootGo);
+            }
+            return existing;
+        }
 
         var root = new GameObject("Campfire");
         var model = LoadModel("campfire-pit");
@@ -433,6 +444,7 @@ public static class SetupMainScene
         col.center = new Vector3(0f, 0.25f, 0f);
         col.radius = 0.7f;
         col.height = 0.5f;
+        root.AddComponent<Campfire>(); // тепло + готовка (рецепты из Resources)
 
         var glow = new GameObject("Glow");
         glow.transform.SetParent(root.transform, false);

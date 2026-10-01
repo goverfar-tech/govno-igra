@@ -1,0 +1,46 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+// Тултип с именем предмета над слотом (наведение мышью).
+// Статический сервис: единственная вьюшка на HudCanvas, создаётся
+// Hud'ом через Init; триггеры слотов дёргают Show/Hide.
+public static class TooltipService
+{
+    static RectTransform panelRt;
+    static Text label;
+
+    public static void Init(Transform canvasRoot)
+    {
+        var back = UiWidgets.Panel(canvasRoot,
+            "Tooltip", new Color(0.04f, 0.045f, 0.05f, 0.92f));
+        panelRt = (RectTransform)back.transform;
+        panelRt.pivot = new Vector2(0.5f, 0f);
+        panelRt.anchorMin = panelRt.anchorMax = new Vector2(0f, 0f);
+        panelRt.sizeDelta = new Vector2(240f, 30f);
+        back.raycastTarget = false;
+
+        label = UiWidgets.Text(panelRt, "Text", 13);
+        UiWidgets.Stretch(label.rectTransform, 8f, 0f);
+
+        panelRt.gameObject.SetActive(false);
+    }
+
+    public static void Show(string text, RectTransform anchor)
+    {
+        if (panelRt == null || anchor == null) return;
+        if (string.IsNullOrEmpty(text)) return;
+        label.text = text;
+        panelRt.gameObject.SetActive(true);
+        // верхняя грань слота в экранных пикселях (ovеrlay: world == screen)
+        var corners = new Vector3[4];
+        anchor.GetWorldCorners(corners);
+        var topMid = (corners[1] + corners[2]) * 0.5f;
+        panelRt.position = topMid + Vector3.up * 6f;
+        panelRt.SetAsLastSibling();
+    }
+
+    public static void Hide()
+    {
+        if (panelRt != null) panelRt.gameObject.SetActive(false);
+    }
+}

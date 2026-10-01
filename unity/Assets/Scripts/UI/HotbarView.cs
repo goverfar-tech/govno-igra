@@ -16,6 +16,7 @@ public class HotbarView : MonoBehaviour
         public Text name;
         public Text count;
         public Outline selection;
+        public ItemData shownItem; // что сейчас нарисовано — для тултипа
     }
 
     readonly SlotRef[] slots = new SlotRef[Inventory.HotbarSize];
@@ -77,6 +78,10 @@ public class HotbarView : MonoBehaviour
         UiWidgets.Stretch(key.rectTransform, 5f, 3f);
         key.text = (index + 1).ToString();
         key.color = new Color(1f, 1f, 1f, 0.35f);
+
+        // тултип с именем предмета (иконка имя не дублирует)
+        var trig = back.gameObject.AddComponent<ItemTooltipTrigger>();
+        trig.GetText = () => r.shownItem != null ? r.shownItem.displayName : null;
         return r;
     }
 
@@ -88,6 +93,7 @@ public class HotbarView : MonoBehaviour
             var s = inv.slots[i];
             var v = slots[i];
             bool empty = s.IsEmpty;
+            v.shownItem = empty ? null : s.item;
             v.count.text = !empty && s.count > 1 ? s.count.ToString() : "";
             if (!empty && s.item.icon != null)
             {

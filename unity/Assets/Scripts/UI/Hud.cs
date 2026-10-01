@@ -8,17 +8,25 @@ using UnityEngine.UI;
 //
 // Весь интерфейс строится кодом в Awake: Canvas + CanvasScaler +
 // GraphicRaycaster, полоски статов, прицел, подсказка, тосты, хотбар,
-// панель инвентаря, экран смерти, пауза.
+// панель инвентаря, экран смерти, пауза, стартовое главное меню,
+// настройки, тултипы.
 //
 // Источники данных: Player/Inventory/Stats находятся сами по сцене,
 // обновления — по событиям GameEvents (§4 архитектуры).
 //
-// Состояния: игра | инвентарь (Tab) | пауза (Esc) | смерть.
+// Состояния: игра | инвентарь (Tab) | пауза (Esc) | смерть |
+// стартовое меню | настройки (поверх меню/паузы).
 // Любое открытое UI-состояние агрегируется в uiActive и вещается
 // наружу как InventoryOpenChanged — Player на него уже реагирует
-// (блок ввода + освобождение курсора).
+// (блок ввода + освобождение курсора); курсор для верности дублируем тут.
+// timeScale = 0 ровно когда открыто меню или пауза (SyncTimeScale).
 public class Hud : MonoBehaviour
 {
+    // Рестарт (экран смерти/пауза) пережидает смену сцены статикой —
+    // после «Начать заново» стартовое меню не показываем.
+    static bool skipMenuOnce;
+    public static void SkipMenuOnNextLoad() => skipMenuOnce = true;
+
     Stats stats;
     Inventory inventory;
 
@@ -30,10 +38,15 @@ public class Hud : MonoBehaviour
     InventoryPanelView inventoryPanel;
     DeathScreen deathScreen;
     PauseMenu pauseMenu;
+    MainMenu mainMenu;
+    SettingsPanel settingsPanel;
 
     bool inventoryOpen;
     bool paused;
     bool dead;
+    bool menuOpen;      // стартовое меню
+    bool settingsOpen;  // настройки поверх меню или паузы
+    bool settingsFromMenu;
     bool uiActive;
 
     void Awake()
@@ -49,8 +62,18 @@ public class Hud : MonoBehaviour
             inventory = player.GetComponent<Inventory>();
         }
 
+        GameSettings.ApplyAll(); // FOV/чувствительность/громкость из PlayerPrefs
+
         EnsureEventSystem();
         Build();
+
+        // стартовое меню — только на «свежем» запуске, не после рестарта
+        if (skipMenuOnce) { skipMenuOnce = false; menuOpen = false; }
+        else menuOpen = true;
+        mainMenu.gameObject.SetActive(menuOpen);
+        SyncUiActive();
+        SyncTimeScale();
+
         RefreshAll();
     }
 
@@ -81,12 +104,14 @@ public class Hud : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.R)) Restart();
             return;
         }
+        if (menuOpen) return; // в меню выбор только кнопками
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (inventoryOpen) SetInventoryOpen(false);
+            if (settingsOpen) CloseSettings();
+            else if (inventoryOpen) SetInventoryOpen(false);
             else SetPaused(!paused);
         }
-        if (Input.GetKeyDown(KeyCode.Tab) && !paused)
+        if (Input.GetKeyDown(KeyCode.Tab) && !paused && !settingsOpen)
             SetInventoryOpen(!inventoryOpen);
     }
 
@@ -114,13 +139,23 @@ public class Hud : MonoBehaviour
         BuildStats(crt);
         BuildCrosshair(crt);
         BuildPrompt(crt);
-        toasts = ToastFeed.Create(crt);
         hotbar = HotbarView.Create(crt);
         inventoryPanel = InventoryPanelView.Create(crt, inventory);
-        deathScreen = DeathScreen.Create(crt); // рестарт делает сама вьюшка
+        deathScreen = DeathScreen.Create(crt);
+        deathScreen.RestartRequested = Restart;
         pauseMenu = PauseMenu.Create(crt);
         pauseMenu.ResumeRequested = () => SetPaused(false);
+        pauseMenu.SettingsRequested = () => OpenSettings(false);
         pauseMenu.RestartRequested = Restart;
+        settingsPanel = SettingsPanel.Create(crt);
+        settingsPanel.BackRequested = CloseSettings;
+        mainMenu = MainMenu.Create(crt);
+        mainMenu.ContinueRequested = ContinueGame;
+        mainMenu.NewGameRequested = CloseMenu;
+        mainMenu.SettingsRequested = () => OpenSettings(true);
+        // тосты и тултип — последними, чтобы лежали поверх меню/паузы
+        toasts = ToastFeed.Create(crt);
+        TooltipService.Init(crt);
     }
 
     void BuildStats(RectTransform root)
@@ -238,31 +273,92 @@ public class Hud : MonoBehaviour
     {
         inventoryOpen = open;
         inventoryPanel.gameObject.SetActive(open);
+        if (!open) TooltipService.Hide();
         SyncUiActive();
     }
 
     void SetPaused(bool on)
     {
+        if (dead || menuOpen) return;
         paused = on;
         pauseMenu.gameObject.SetActive(on);
-        Time.timeScale = on ? 0f : 1f;
+        if (!on && settingsOpen) CloseSettings(); // не оставляем настройки без паузы
         GameEvents.RaisePauseChanged(on);
         SyncUiActive();
+        SyncTimeScale();
+    }
+
+    void OpenSettings(bool fromMenu)
+    {
+        settingsFromMenu = fromMenu;
+        settingsOpen = true;
+        if (fromMenu) mainMenu.gameObject.SetActive(false);
+        settingsPanel.Show();
+        SyncUiActive();
+    }
+
+    void CloseSettings()
+    {
+        settingsOpen = false;
+        settingsPanel.Hide();
+        GameSettings.Flush();
+        if (settingsFromMenu) mainMenu.gameObject.SetActive(true);
+        SyncUiActive();
+    }
+
+    // «Продолжить» в стартовом меню: загрузить сейв (та же логика, что F9).
+    // Сейва нет — остаёмся в меню, тост «Нет сохранения» покажет SaveSystem.
+    void ContinueGame()
+    {
+        var ss = FindAnyObjectByType<SaveSystem>();
+        if (ss != null && ss.LoadGame())
+            CloseMenu();
+    }
+
+    // «Новая игра»: просто снять меню — мир сгенерирован при старте сцены.
+    void CloseMenu()
+    {
+        if (!menuOpen) return;
+        menuOpen = false;
+        if (settingsOpen) CloseSettings();
+        mainMenu.Close();
+        SyncUiActive();
+        SyncTimeScale();
     }
 
     void Restart()
     {
+        SkipMenuOnNextLoad();
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     // Любое UI-состояние блокирует ввод Player и отпускает курсор
-    // (Player сам следит за InventoryOpenChanged).
+    // (Player сам следит за InventoryOpenChanged; курсор дублируем тут,
+    // чтобы не зависеть от порядка подписки при старте сцены).
     void SyncUiActive()
     {
-        bool active = inventoryOpen || paused || dead;
+        bool active = inventoryOpen || paused || dead || menuOpen || settingsOpen;
         if (active == uiActive) return;
         uiActive = active;
         GameEvents.RaiseInventoryOpenChanged(active);
+        if (active)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+    }
+
+    // Стоп-кадр держится ровно на меню и паузе; смерть мир не замирает.
+    void SyncTimeScale()
+    {
+        float target = (menuOpen || paused) ? 0f : 1f;
+        if (!Mathf.Approximately(Time.timeScale, target))
+            Time.timeScale = target;
     }
 }

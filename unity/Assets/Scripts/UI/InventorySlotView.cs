@@ -18,6 +18,7 @@ public class InventorySlotView : MonoBehaviour,
     Text countText;
     Outline selection;
     CanvasGroup group;
+    ItemData shownItem; // что сейчас нарисовано — для тултипа
 
     public static InventorySlotView Create(Transform parent, InventoryPanelView panel, int index)
     {
@@ -45,6 +46,9 @@ public class InventorySlotView : MonoBehaviour,
         slot.countText = UiWidgets.Text(back.transform, "Count", 14, TextAnchor.LowerRight);
         UiWidgets.Stretch(slot.countText.rectTransform, 4f);
         slot.countText.fontStyle = FontStyle.Bold;
+
+        var trig = back.gameObject.AddComponent<ItemTooltipTrigger>();
+        trig.GetText = () => slot.shownItem != null ? slot.shownItem.displayName : null;
         return slot;
     }
 
@@ -53,12 +57,14 @@ public class InventorySlotView : MonoBehaviour,
         selection.enabled = selected;
         if (s == null || s.IsEmpty)
         {
+            shownItem = null;
             icon.enabled = false;
             icon.sprite = null;
             nameText.text = "";
             countText.text = "";
             return;
         }
+        shownItem = s.item;
         if (s.item.icon != null)
         {
             icon.sprite = s.item.icon;

@@ -136,4 +136,17 @@ public class SaveSystem : MonoBehaviour
 
         GameEvents.RaiseNotify("Загружено");
     }
+
+    // Публичный фасад для UI (главное меню, Поток B): та же логика, что у F9.
+    // Возвращает false, если сейва нет — меню остаётся открытым (тост уже показан).
+    public bool LoadGame()
+    {
+        if (!File.Exists(SavePath))
+        {
+            GameEvents.RaiseNotify("Нет сохранения");
+            return false;
+        }
+        Load();
+        return true;
+    }
 }

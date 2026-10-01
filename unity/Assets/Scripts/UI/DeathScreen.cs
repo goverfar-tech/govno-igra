@@ -1,10 +1,10 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 // Экран смерти (событие PlayerDied): тёмная вуаль, заголовок
-// и кнопка рестарта. Рестарт — перезагрузка активной сцены;
-// Time.timeScale сбрасываем явно, сцена могла быть на паузе.
+// и кнопка рестарта. Сам сцену не грузит — рестарт делает Hud
+// (RestartRequested), чтобы выставить флаг «без стартового меню»
+// и сбросить Time.timeScale перед LoadScene.
 public class DeathScreen : MonoBehaviour
 {
     public System.Action RestartRequested;
@@ -54,12 +54,5 @@ public class DeathScreen : MonoBehaviour
 
     public void Show() => gameObject.SetActive(true);
 
-    void OnRestartClicked() => Restart();
-
-    void Restart()
-    {
-        Time.timeScale = 1f;
-        RestartRequested?.Invoke();
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-    }
+    void OnRestartClicked() => RestartRequested?.Invoke();
 }

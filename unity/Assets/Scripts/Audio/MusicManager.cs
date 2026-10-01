@@ -95,7 +95,7 @@ public class MusicManager : MonoBehaviour
         var list = new List<string>();
         foreach (var ext in new[] { ".mp3", ".wav" })
             list.AddRange(Directory.GetFiles(dir, prefix + "*" + ext));
-        return list.Count == 0 ? null : list[Random.Range(0, list.Count)];
+        return list.Count == 0 ? null : list[UnityEngine.Random.Range(0, list.Count)];
     }
 
     static IEnumerator LoadClip(string path, Action<AudioClip> done)

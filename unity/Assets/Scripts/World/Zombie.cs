@@ -21,6 +21,7 @@ public class Zombie : MonoBehaviour
     float cooldown;
     Vector3 wanderTarget;
     float repickTarget;
+    float sniffTimer;
     CharacterController cc;
     Player player;
     bool isNight;
@@ -84,6 +85,22 @@ public class Zombie : MonoBehaviour
 
     void Wander()
     {
+        // нюх: ночью зомби тянет к свежему майонезному следу (§9.2)
+        sniffTimer -= Time.deltaTime;
+        if (isNight && sniffTimer <= 0f)
+        {
+            sniffTimer = 2.5f;
+            if (MayoTrail.Instance != null &&
+                MayoTrail.Instance.FreshestNear(transform.position, 14f, out var scent))
+            {
+                wanderTarget = scent;
+                repickTarget = 8f; // не перебивать нюх сразу случайной точкой
+                state = State.Wander;
+                MoveTowards(wanderTarget, walkSpeed);
+                return;
+            }
+        }
+
         repickTarget -= Time.deltaTime;
         if (repickTarget <= 0f || Vector3.Distance(transform.position, wanderTarget) < 1f)
         {

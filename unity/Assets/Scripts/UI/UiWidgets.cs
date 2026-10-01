@@ -81,6 +81,7 @@ public static class UiWidgets
         colors.fadeDuration = 0.06f;
         btn.colors = colors;
         var t = Text(img.transform, "Label", fontSize);
+        t.text = label; // без этого кнопки «немые»
         Stretch(t.rectTransform, 0f);
         return btn;
     }

@@ -149,6 +149,7 @@ public static class SetupMainScene
             tc.radius = 0.3f;
             var tn = t.AddComponent<ResourceNode>();
             tn.yield = wood; tn.hitsLeft = 3; tn.pickupPrefab = pickupPrefabAsset;
+            tn.requiredToolId = "axe";
         }
 
         // камни (12 шт)
@@ -163,6 +164,7 @@ public static class SetupMainScene
             rc.size = new Vector3(1.2f, 1f, 1.2f);
             var rn = r.AddComponent<ResourceNode>();
             rn.yield = stone; rn.hitsLeft = 3; rn.pickupPrefab = pickupPrefabAsset;
+            rn.requiredToolId = "pickaxe";
         }
 
         // ягодные кусты (10 шт, пикап ягоды на кусте)
@@ -217,6 +219,7 @@ public static class SetupMainScene
             node.yield = wood;
             node.hitsLeft = 3;
             node.pickupPrefab = pickupPrefabAsset;
+            node.requiredToolId = "axe";
         }
         else missing.AppendLine("tree / tree-tall");
 
@@ -232,6 +235,7 @@ public static class SetupMainScene
             node.yield = stone;
             node.hitsLeft = 3;
             node.pickupPrefab = pickupPrefabAsset;
+            node.requiredToolId = "pickaxe";
         }
         else missing.AppendLine("resource-stone-large / rock-a");
 

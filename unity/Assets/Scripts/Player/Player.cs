@@ -116,7 +116,17 @@ public class Player : MonoBehaviour
             if (zombie != null) { zombie.TakeDamage(item.toolDamage); return true; }
 
             var node = hit.collider.GetComponentInParent<ResourceNode>();
-            if (node != null) { node.Hit(this, 2); return true; }
+            if (node != null)
+            {
+                // привязка инструмента (Godot: «Здесь нужен другой инструмент»)
+                if (node.requiredToolId != "" && node.requiredToolId != item.id)
+                {
+                    GameEvents.RaiseNotify("Здесь нужен другой инструмент");
+                    return true;
+                }
+                node.Hit(this, 2);
+                return true;
+            }
         }
         return true;
     }

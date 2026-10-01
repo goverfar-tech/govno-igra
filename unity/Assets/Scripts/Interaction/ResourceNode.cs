@@ -8,9 +8,17 @@ public class ResourceNode : MonoBehaviour, IInteractable
     [Min(1)] public int hitsLeft = 3;
     [Min(1)] public int yieldPerHit = 1;
     public PickupItem pickupPrefab; // что спавним при добыче
+    // Каким инструментом рубить быстрее ("" = любым). Дерево = axe,
+    // камень = pickaxe (эталон: resource_node.gd tool_id).
+    public string requiredToolId = "";
 
     public string GetPrompt()
-        => yield != null ? $"[E] Добыть: {yield.displayName} (осталось: {hitsLeft})" : "[E] Добыть";
+    {
+        if (yield == null) return "[E] Добыть";
+        string hint = requiredToolId == "axe" ? " • топор быстрее"
+                    : requiredToolId == "pickaxe" ? " • кирка быстрее" : "";
+        return $"[E] Добыть: {yield.displayName} (осталось: {hitsLeft}){hint}";
+    }
 
     public void Interact(Player player) => Hit(player, 1);
 

@@ -99,6 +99,15 @@ public class Hud : MonoBehaviour
 
     void Update()
     {
+        // Гонка старта: Player.Awake тоже лочит курсор и мог отработать
+        // ПОСЛЕ нашего Awake. Пока открыт любой модальный UI — держим
+        // курсор свободным каждый кадр, а не только на переходах.
+        if (uiActive && Cursor.lockState != CursorLockMode.None)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
         if (dead)
         {
             if (Input.GetKeyDown(KeyCode.R)) Restart();

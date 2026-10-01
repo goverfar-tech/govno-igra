@@ -60,9 +60,16 @@ public class Player : MonoBehaviour
         placeCooldown -= Time.deltaTime;
         swingCooldown -= Time.deltaTime;
         if (Stats.IsDead) return;
-        if (!inputBlocked) Look();
+
+        // Модальный UI (меню/пауза/инвентарь от Hud) блокирует ввод.
+        // Событие InventoryOpenChanged могло проскочить до нашей подписки
+        // при старте сцены (гонка порядка Awake), поэтому проверяем
+        // живое состояние: стоп-кадр или свободный курсор = UI владеет мышью.
+        bool uiOwnsInput = inputBlocked || Time.timeScale <= 0f
+                           || Cursor.lockState != CursorLockMode.Locked;
+        if (!uiOwnsInput) Look();
         Move();
-        if (inputBlocked) return; // панель открыта — мышь работает по UI, не по миру
+        if (uiOwnsInput) return;
         UpdateInteractFocus();
 
         if (Input.GetKeyDown(KeyCode.E) && focus != null)

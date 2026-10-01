@@ -40,6 +40,11 @@ public class AudioManager : MonoBehaviour
     public float deathDb = -6f;
     public float gurgleDb = -18f;
 
+    [Header("UI-подсказки слуху (клики/шорохи)")]
+    public float selectDb = -24f;      // смена слота хотбара
+    public float rustleDb = -22f;      // открытие/закрытие инвентаря
+    public float pauseDb = -26f;       // пауза
+
     [Header("Шаги")]
     public float stepDistance = 1.9f;  // метров пути на один шаг (эталон)
     public float minStepSpeed = 0.4f;  // медленнее — считаем, что стоим
@@ -50,9 +55,16 @@ public class AudioManager : MonoBehaviour
     public float gurgleMinDist = 12f;  // радиус области вокруг игрока
     public float gurgleMaxDist = 20f;
 
+    [Header("Треск костров (навешивается на объекты с FireLight)")]
+    public float crackleDb = -14f;     // громкость у самого костра
+    public float crackleMinDist = 2f;
+    public float crackleMaxDist = 12f;
+    public float fireScanInterval = 3f; // секунд между сканами сцены
+
     AudioClip stepClip, stepSplashClip, hitClip, pickupClip, eatClip;
     AudioClip whooshClip, windClip, gruntClip, squealClip;
     AudioClip gurgleClip, deathClip, toastClip;
+    AudioClip selectClip, openClip, closeClip, pauseClip, crackleClip;
 
     AudioSource flatSource; // 2D одношоты (UI/еда/стинг); pitch ставится перед PlayOneShot
     AudioSource stepSource; // шаги отдельно — не перебивают UI-звуки pitch'ем
@@ -66,7 +78,9 @@ public class AudioManager : MonoBehaviour
     float stepAccum;
     float lastPickupSfx = -99f;
     float lastToastSfx = -99f;
+    float lastSelectSfx = -99f;
     float nextGurgleTime = 12f;
+    float nextFireScan = 2f; // первый скан почти сразу — костры на спауне
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AutoCreate()
@@ -101,6 +115,9 @@ public class AudioManager : MonoBehaviour
         GameEvents.Notify += OnNotify;
         GameEvents.PlayerDied += OnPlayerDied;
         GameEvents.TimeOfDayChanged += OnTimeOfDayChanged;
+        GameEvents.SelectionChanged += OnSelectionChanged;
+        GameEvents.InventoryOpenChanged += OnInventoryOpenChanged;
+        GameEvents.PauseChanged += OnPauseChanged;
     }
 
     void OnDisable()
@@ -111,6 +128,9 @@ public class AudioManager : MonoBehaviour
         GameEvents.Notify -= OnNotify;
         GameEvents.PlayerDied -= OnPlayerDied;
         GameEvents.TimeOfDayChanged -= OnTimeOfDayChanged;
+        GameEvents.SelectionChanged -= OnSelectionChanged;
+        GameEvents.InventoryOpenChanged -= OnInventoryOpenChanged;
+        GameEvents.PauseChanged -= OnPauseChanged;
     }
 
     // ---------- построение ----------
@@ -129,6 +149,11 @@ public class AudioManager : MonoBehaviour
         gruntClip = ProceduralSfx.MakeGrunt();
         gurgleClip = ProceduralSfx.MakeGurgle();
         deathClip = ProceduralSfx.MakeDeathSting();
+        selectClip = ProceduralSfx.MakeBlip("sfx_ui_select", 1400f, 2000f, 0.03f);
+        openClip = ProceduralSfx.MakeRustle(true);
+        closeClip = ProceduralSfx.MakeRustle(false);
+        pauseClip = ProceduralSfx.MakeBlip("sfx_ui_pause", 420f, 300f, 0.07f);
+        crackleClip = ProceduralSfx.MakeCrackle();
     }
 
     void BuildSources()
@@ -158,6 +183,7 @@ public class AudioManager : MonoBehaviour
         TickWind(Time.deltaTime);
         TickFootsteps(Time.deltaTime);
         TickGurgle();
+        TickFireScan();
     }
 
     void FindPlayer()
@@ -220,6 +246,32 @@ public class AudioManager : MonoBehaviour
         PlayAt(gurgleClip, pos, gurgleDb, Random.Range(0.75f, 1.1f));
     }
 
+    // Раз в fireScanInterval секунд находим костры (объекты с FireLight)
+    // без AudioSource и навешиваем зацикленный процедурный треск.
+    // Безобидно при перезагрузке сцены: погибшие костры отпадают сами,
+    // новые (построенные игроком) подхватываются очередным сканом.
+    void TickFireScan()
+    {
+        if (Time.time < nextFireScan) return;
+        nextFireScan = Time.time + fireScanInterval;
+
+        foreach (var fire in FindObjectsByType<FireLight>(FindObjectsSortMode.None))
+        {
+            if (fire == null || fire.GetComponent<AudioSource>() != null) continue;
+            var src = fire.gameObject.AddComponent<AudioSource>();
+            src.clip = crackleClip;
+            src.loop = true;
+            src.spatialBlend = 1f;
+            src.dopplerLevel = 0f;
+            src.rolloffMode = AudioRolloffMode.Linear;
+            src.minDistance = crackleMinDist;
+            src.maxDistance = crackleMaxDist;
+            src.pitch = Random.Range(0.9f, 1.1f);
+            src.volume = Db(crackleDb);
+            src.Play();
+        }
+    }
+
     // ---------- обработчики GameEvents ----------
 
     void OnInventoryChanged()
@@ -253,6 +305,28 @@ public class AudioManager : MonoBehaviour
     }
 
     void OnTimeOfDayChanged(float t, bool night) => isNight = night;
+
+    // Короткий «тик» при смене слота (колёсико может дать серию за кадр —
+    // режем дросселем, иначе звук складывается в пулемётную очередь).
+    void OnSelectionChanged()
+    {
+        if (Time.time - lastSelectSfx < 0.05f) return;
+        lastSelectSfx = Time.time;
+        flatSource.pitch = Random.Range(0.96f, 1.06f);
+        flatSource.PlayOneShot(selectClip, Db(selectDb));
+    }
+
+    void OnInventoryOpenChanged(bool open)
+    {
+        flatSource.pitch = Random.Range(0.96f, 1.05f);
+        flatSource.PlayOneShot(open ? openClip : closeClip, Db(rustleDb));
+    }
+
+    void OnPauseChanged(bool paused)
+    {
+        flatSource.pitch = 1f;
+        flatSource.PlayOneShot(pauseClip, Db(pauseDb));
+    }
 
     // ---------- проигрывание ----------
 

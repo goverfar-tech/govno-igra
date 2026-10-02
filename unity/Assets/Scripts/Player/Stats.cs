@@ -1,48 +1,34 @@
 using UnityEngine;
 
-// HP / сытость / жажда (аналог stats.gd, числа — из Godot-эталона §10).
-// Майонезная мета: «еда» позже переосмыслится как уровень майонеза
-// в ведре с пробитым дном (§9.2) — расход уже сейчас и есть утечка.
+// МАЙОНЕЗ — единый ресурс (§9.2): здоровье и сытость в одном ведре.
+// Течёт сам (дыра в дне), бег/холодная ночь ускоряют, костёр греет,
+// зомби выбивают ударами. Пустое ведро = смерть.
+// Яд (§9.3) — отдельный статус: выветривается, но пока есть — жрёт майонез.
 public class Stats : MonoBehaviour
 {
-    public float maxHp = 100f;
-    public float maxFood = 100f;
-    public float maxWater = 100f;
+    [Header("Майонез")]
+    public float maxMayo = 100f;
+    [Tooltip("утечка в секунду: ~8 минут до пустого ведра")]
+    public float leakPerSec = 100f / 460f;
+    public float sprintLeakMultiplier = 1.6f;
+    public float nightLeakMultiplier = 1.5f;   // холодная ночь
 
-    [Header("Расход в секунду (Godot-эталон: еда ~10 мин, вода ~6 мин)")]
-    public float foodDrain = 100f / 600f;
-    public float waterDrain = 100f / 360f;
-    public float starveDamage = 1f;      // HP/сек при нулевом стате
-    public float thirstDamage = 1f;
-    public float sprintDrainMultiplier = 1.6f;
-    public float nightDrainMultiplier = 1.5f;  // ночью прохладно — расход выше
-
-    [Header("Регенерация (еда И вода выше порога)")]
-    public float regenMinStat = 70f;
-    public float regenRate = 0.5f;       // HP/сек
+    [Header("Яд")]
+    public float maxPoison = 100f;
+    public float poisonDecay = 2f;             // ед. яда/сек выветривается
+    public float poisonMayoDps = 1.5f;         // майонеза/сек, пока яд > 0
 
     // Тепло костра: Campfire ставит Time.time, пока игрок рядом.
-    // Пока метка свежая — ночной множитель расхода не работает.
     [System.NonSerialized] public float lastWarmTime = -10f;
     const float WarmWindowSec = 1f;
 
-    [Header("Яд (§9.3): еда с ядом жрёт HP, пока не выветрится")]
-    public float maxPoison = 100f;
-    public float poisonDecay = 2f;       // ед. яда/сек выветривается
-    public float poisonDps = 1.5f;       // HP/сек, пока яд > 0
-
-    public float Hp { get; private set; }
-    public float Food { get; private set; }
-    public float Water { get; private set; }
+    public float Mayo { get; private set; }
     public float Poison { get; private set; }
     public bool IsDead { get; private set; }
 
     bool isNight;
 
-    void Awake()
-    {
-        Hp = maxHp; Food = maxFood; Water = maxWater;
-    }
+    void Awake() => Mayo = maxMayo;
 
     void OnEnable() => GameEvents.TimeOfDayChanged += OnTimeChanged;
     void OnDisable() => GameEvents.TimeOfDayChanged -= OnTimeChanged;
@@ -53,42 +39,29 @@ public class Stats : MonoBehaviour
     {
         if (IsDead) return;
         bool warm = Time.time - lastWarmTime < WarmWindowSec;
-        float mult = (sprinting ? sprintDrainMultiplier : 1f)
-                   * (isNight && !warm ? nightDrainMultiplier : 1f);
-        Food = Mathf.Max(0f, Food - foodDrain * mult * dt);
-        Water = Mathf.Max(0f, Water - waterDrain * mult * dt);
+        float mult = (sprinting ? sprintLeakMultiplier : 1f)
+                   * (isNight && !warm ? nightLeakMultiplier : 1f);
+        Mayo = Mathf.Max(0f, Mayo - leakPerSec * mult * dt);
 
-        if (Food <= 0f) Damage(starveDamage * dt);
-        if (Water <= 0f) Damage(thirstDamage * dt);
-
-        // яд: выветривается, пока есть — жрёт HP и блокирует реген
         if (Poison > 0f)
         {
             Poison = Mathf.Max(0f, Poison - poisonDecay * dt);
-            Damage(poisonDps * dt);
+            Mayo = Mathf.Max(0f, Mayo - poisonMayoDps * dt);
         }
 
-        if (!IsDead && Poison <= 0f && Food > regenMinStat && Water > regenMinStat)
-            Hp = Mathf.Min(maxHp, Hp + regenRate * dt);
-
+        if (Mayo <= 0f)
+        {
+            IsDead = true;
+            GameEvents.RaisePlayerDied();
+        }
         GameEvents.RaiseStatsChanged();
     }
 
-    // Проставить значения из сохранения (SaveSystem).
-    public void SetState(float hp, float food, float water)
-    {
-        Hp = Mathf.Clamp(hp, 0f, maxHp);
-        Food = Mathf.Clamp(food, 0f, maxFood);
-        Water = Mathf.Clamp(water, 0f, maxWater);
-        GameEvents.RaiseStatsChanged();
-    }
-
-    public void Eat(float food, float water, float heal, float poison = 0f)
+    // Еда/варево/питьё майонеза. heal слился в mayo (§9.2).
+    public void Feed(float mayoRestore, float poison = 0f)
     {
         if (IsDead) return;
-        Food = Mathf.Min(maxFood, Food + food);
-        Water = Mathf.Min(maxWater, Water + water);
-        Hp = Mathf.Min(maxHp, Hp + heal);
+        Mayo = Mathf.Min(maxMayo, Mayo + mayoRestore);
         if (poison > 0f)
         {
             Poison = Mathf.Min(maxPoison, Poison + poison);
@@ -97,15 +70,24 @@ public class Stats : MonoBehaviour
         GameEvents.RaiseStatsChanged();
     }
 
+    // Урон выбивает майонез из пробитого ведра.
     public void Damage(float amount)
     {
         if (IsDead) return;
-        Hp = Mathf.Max(0f, Hp - amount);
-        if (Hp <= 0f)
+        Mayo = Mathf.Max(0f, Mayo - amount);
+        if (Mayo <= 0f)
         {
             IsDead = true;
             GameEvents.RaisePlayerDied();
         }
+        GameEvents.RaiseStatsChanged();
+    }
+
+    // Проставить значения из сохранения (SaveSystem).
+    public void SetState(float mayo, float poison)
+    {
+        Mayo = Mathf.Clamp(mayo, 0f, maxMayo);
+        Poison = Mathf.Clamp(poison, 0f, maxPoison);
         GameEvents.RaiseStatsChanged();
     }
 }

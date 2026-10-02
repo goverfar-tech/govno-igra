@@ -65,7 +65,10 @@ public class Inventory : MonoBehaviour
         var s = SelectedSlot;
         if (s.IsEmpty || !s.item.IsConsumable) return;
         var item = s.item;
-        player.Stats.Eat(item.foodRestore, item.waterRestore, item.healAmount, item.poisonAmount);
+        // §9.2: еда, лечение и «вода» слились в майонез; фляга сырого
+        // майонеза питательна наполовину против еды.
+        player.Stats.Feed(item.foodRestore + item.healAmount + item.waterRestore * 0.5f,
+                          item.poisonAmount);
         s.count--;
         if (s.count <= 0) { s.item = null; s.count = 0; }
         ConsumeReturns(item.consumeReturns);

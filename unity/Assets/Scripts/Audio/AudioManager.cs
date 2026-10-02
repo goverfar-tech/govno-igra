@@ -434,7 +434,7 @@ public class AudioManager : MonoBehaviour
     void OnStatsChanged()
     {
         if (player == null || player.Stats == null) return;
-        float hp = player.Stats.Hp;
+        float hp = player.Stats.Mayo; // сердце = ведро пустеет
         if (player.Stats.IsDead || hp >= heartbeatHp)
         {
             heartbeatTarget = 0f;

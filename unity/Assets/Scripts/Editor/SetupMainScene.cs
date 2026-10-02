@@ -94,7 +94,7 @@ public static class SetupMainScene
         // баланса сюда, потом перезапуск Setup.
         EnsureFolder("Assets/Items");
         var flaskEmpty = SyncItem("flask_empty", "Фляга (пустая)", 1, worldModel: "bottle");
-        var flask = SyncItem("flask", "Фляга (полная)", 1, water: 40f, consumeReturns: flaskEmpty);
+        var flask = SyncItem("flask", "Фляга (сырой майонез)", 1, food: 20f, poison: 15f, consumeReturns: flaskEmpty);
         var wood = SyncItem("wood", "Древесина", 30, worldModel: "resource-wood");
         var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
         var berry = SyncItem("berry", "Ягода", 20, food: 12f);
@@ -176,7 +176,7 @@ public static class SetupMainScene
 
         // озеро: вода + наполнение фляги
         float lakeY = TerrainGen.HeightAt(TerrainGen.LakeCenter.x, TerrainGen.LakeCenter.y);
-        var lake = new GameObject("Lake");
+        var lake = new GameObject("MayoPuddle");
         lake.transform.position = new Vector3(TerrainGen.LakeCenter.x, lakeY + 1.2f, TerrainGen.LakeCenter.y);
 
         var water = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -184,7 +184,7 @@ public static class SetupMainScene
         water.transform.SetParent(lake.transform, false);
         water.transform.localScale = new Vector3(TerrainGen.LakeRadius * 1.6f, 0.05f, TerrainGen.LakeRadius * 1.6f);
         water.GetComponent<MeshRenderer>().sharedMaterial =
-            CreateMaterial("Water", new Color(0.2f, 0.4f, 0.55f));
+            CreateMaterial("Mayo", new Color(0.93f, 0.88f, 0.62f)); // майонезная лужа, §9
         var waterCol = water.GetComponent<CapsuleCollider>();
         if (waterCol != null) Object.DestroyImmediate(waterCol);
 

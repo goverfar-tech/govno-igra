@@ -22,9 +22,10 @@ public class SaveSystem : MonoBehaviour
     [System.Serializable]
     class SaveData
     {
+        public int version = 2; // 2 = эпоха майонеза (hp/food/water → mayo/poison)
         public Vector3 playerPos;
         public float yaw, pitch;
-        public float hp, food, water;
+        public float mayo, poison;
         public int selected;
         public float timeOfDay;
         public List<SlotData> inventory = new List<SlotData>();
@@ -64,9 +65,8 @@ public class SaveSystem : MonoBehaviour
             playerPos = player.transform.position,
             yaw = player.transform.eulerAngles.y,
             pitch = player.Pitch,
-            hp = player.Stats.Hp,
-            food = player.Stats.Food,
-            water = player.Stats.Water,
+            mayo = player.Stats.Mayo,
+            poison = player.Stats.Poison,
             selected = player.Inventory.selected
         };
 
@@ -96,6 +96,11 @@ public class SaveSystem : MonoBehaviour
             return;
         }
         var data = JsonUtility.FromJson<SaveData>(File.ReadAllText(SavePath));
+        if (data.version != 2)
+        {
+            GameEvents.RaiseNotify("Сейв старой версии — не встаёт, начни заново");
+            return;
+        }
         var player = FindFirstObjectByType<Player>();
         if (player == null) return;
 
@@ -115,7 +120,7 @@ public class SaveSystem : MonoBehaviour
         // игрок: позиция, взгляд, статы, инвентарь
         player.Teleport(data.playerPos);
         player.ApplyView(data.yaw, data.pitch);
-        player.Stats.SetState(data.hp, data.food, data.water);
+        player.Stats.SetState(data.mayo, data.poison);
 
         for (int i = 0; i < player.Inventory.slots.Count && i < data.inventory.Count; i++)
         {

@@ -72,9 +72,8 @@ public class DebugHud : MonoBehaviour
 
         if (stats != null)
         {
-            GUI.Label(new Rect(10, y, 400, 24), $"HP {stats.Hp:F0}/{stats.maxHp:F0}", style); y += 24;
-            GUI.Label(new Rect(10, y, 400, 24), $"Еда {stats.Food:F0}/{stats.maxFood:F0}", style); y += 24;
-            GUI.Label(new Rect(10, y, 400, 24), $"Вода {stats.Water:F0}/{stats.maxWater:F0}", style); y += 24;
+            GUI.Label(new Rect(10, y, 400, 24), $"Майонез {stats.Mayo:F0}/{stats.maxMayo:F0}", style); y += 24;
+            GUI.Label(new Rect(10, y, 400, 24), $"Яд {stats.Poison:F0}/{stats.maxPoison:F0}", style); y += 24;
         }
 
         // прицел

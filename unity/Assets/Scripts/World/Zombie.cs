@@ -74,7 +74,7 @@ public class Zombie : MonoBehaviour
                 {
                     cooldown = attackCooldown;
                     player.Stats.Damage(attackDamage);
-                    GameEvents.RaiseNotify("Зомби бьёт! -" + attackDamage + " HP");
+                    GameEvents.RaiseNotify("Зомби выбивает майонез! -" + attackDamage);
                 }
                 break;
         }

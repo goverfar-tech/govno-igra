@@ -32,7 +32,9 @@ public class Hud : MonoBehaviour
     Inventory inventory;
 
     Canvas canvas;
-    StatBar hpBar, foodBar, waterBar;
+    // Полоски: майонез (HP+еда), яд, небесные часы (§9.2)
+    StatBar mayoBar, poisonBar, timeBar;
+    float timeOfDay;
     HotbarView hotbar;
     Text promptText;
     ToastFeed toasts;
@@ -88,7 +90,10 @@ public class Hud : MonoBehaviour
         GameEvents.PromptChanged += OnPrompt;
         GameEvents.Notify += OnNotify;
         GameEvents.PlayerDied += OnPlayerDied;
+        GameEvents.TimeOfDayChanged += OnTime;
     }
+
+    void OnTime(float t, bool night) { timeOfDay = t; RefreshStats(); }
 
     void OnDisable()
     {
@@ -98,6 +103,7 @@ public class Hud : MonoBehaviour
         GameEvents.PromptChanged -= OnPrompt;
         GameEvents.Notify -= OnNotify;
         GameEvents.PlayerDied -= OnPlayerDied;
+        GameEvents.TimeOfDayChanged -= OnTime;
     }
 
     void Update()
@@ -193,9 +199,9 @@ public class Hud : MonoBehaviour
         vlg.childForceExpandWidth = true;
         vlg.childForceExpandHeight = false;
 
-        hpBar = StatBar.Create(panel.transform, "HP", UiWidgets.HpColor);
-        foodBar = StatBar.Create(panel.transform, "Еда", UiWidgets.FoodColor);
-        waterBar = StatBar.Create(panel.transform, "Вода", UiWidgets.WaterColor);
+        mayoBar = StatBar.Create(panel.transform, "Майонез", UiWidgets.FoodColor);
+        poisonBar = StatBar.Create(panel.transform, "Яд", new Color(0.55f, 0.75f, 0.3f));
+        timeBar = StatBar.Create(panel.transform, "Небо", new Color(0.35f, 0.4f, 0.6f));
     }
 
     void BuildCrosshair(RectTransform root)
@@ -250,9 +256,11 @@ public class Hud : MonoBehaviour
     void RefreshStats()
     {
         if (stats == null) return;
-        hpBar.Set(stats.Hp, stats.maxHp);
-        foodBar.Set(stats.Food, stats.maxFood);
-        waterBar.Set(stats.Water, stats.maxWater);
+        // §9.2: ведро = здоровье+сытость слились в «Майонез». Яд — статус.
+        // Третья полоска: небесные часы (сколько суток прошло, полная=ночь).
+        mayoBar.Set(stats.Mayo, stats.maxMayo);
+        poisonBar.Set(stats.Poison, stats.maxPoison);
+        timeBar.Set(timeOfDay, 1f);
     }
 
     void RefreshInventory()

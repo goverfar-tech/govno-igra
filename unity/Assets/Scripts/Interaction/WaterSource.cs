@@ -13,7 +13,7 @@ public class WaterSource : MonoBehaviour, IInteractable
     public string GetPrompt()
     {
         float left = nextFillTime - Time.time;
-        return left > 0f ? $"Лужа мелеет… (ещё {Mathf.CeilToInt(left)} с)" : "[E] Наполнить флягу";
+        return left > 0f ? $"Лужа мелеет… (ещё {Mathf.CeilToInt(left)} с)" : "[E] Начерпать сырой майонез";
     }
 
     public void Interact(Player player)
@@ -39,6 +39,6 @@ public class WaterSource : MonoBehaviour, IInteractable
             return;
         }
         nextFillTime = Time.time + refillCooldown;
-        GameEvents.RaiseNotify("Фляга наполнена");
+        GameEvents.RaiseNotify("Начерпал сырого майонеза");
     }
 }

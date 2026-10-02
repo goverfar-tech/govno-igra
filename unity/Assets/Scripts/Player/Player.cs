@@ -25,6 +25,19 @@ public class Player : MonoBehaviour
     public float interactRange = 2.5f;
     public LayerMask interactMask = ~0;
 
+    [Header("Ощущение тела (R1)")]
+    public float bobAmplitude = 0.045f;   // вертикальный headbob при ходьбе
+    public float bobFrequency = 8f;       // базовая частота, масштабируется скоростью
+    public float landDipMax = 0.14f;      // проседание при жёстком приземлении
+    public float sprintFovKick = 1.05f;   // множитель FOV на бегу
+
+    float bobPhase, bobOffset, landOffset;
+    bool wasGrounded = true;
+    float lastFallVel;
+    bool isCrouchingSmooth;
+    Camera cam;                           // камера в Head (для FOV-кика)
+    float baseHeadY = -1f;                // высота головы из сетапа (ловим один раз)
+
     public Inventory Inventory { get; private set; }
     public Stats Stats { get; private set; }
     public float Pitch => pitch;
@@ -163,6 +176,39 @@ public class Player : MonoBehaviour
         if (head != null) head.localEulerAngles = new Vector3(pitch, 0f, 0f);
     }
 
+    void LateUpdate()
+    {
+        if (head == null) return;
+        if (cam == null) cam = head.GetComponentInChildren<Camera>();
+        if (baseHeadY < 0f) baseHeadY = head.localPosition.y; // из сетапа (1.6)
+
+        // --- headbob (R1): фаза идёт от скорости, затухает в прыжке/на месте ---
+        Vector3 hv = cc.velocity; hv.y = 0f;
+        float speedNorm = Mathf.Clamp01(hv.magnitude / (walkSpeed * sprintMultiplier));
+        bool moving = speedNorm > 0.05f && cc.isGrounded;
+        if (moving)
+            bobPhase += Time.deltaTime * bobFrequency * Mathf.Lerp(0.6f, 1.4f, speedNorm);
+        float amp = bobAmplitude * Mathf.Lerp(0.6f, 1f, speedNorm)
+                    * (isCrouchingSmooth ? 0.45f : 1f);
+        bobOffset = moving
+            ? Mathf.Lerp(bobOffset, Mathf.Sin(bobPhase) * amp, Time.deltaTime * 8f)
+            : Mathf.Lerp(bobOffset, 0f, Time.deltaTime * 6f);
+        landOffset = Mathf.MoveTowards(landOffset, 0f, Time.deltaTime * 0.45f);
+
+        // голова: высота следует за плавной капсулой + bob + проседание
+        float heightT = Mathf.InverseLerp(crouchHeight, standHeight, cc.height);
+        float headY = Mathf.Lerp(baseHeadY * 0.62f, baseHeadY, heightT);
+        head.localPosition = new Vector3(0f, headY + bobOffset + landOffset, 0f);
+
+        // --- FOV-кик на бегу: базу читаем из GameSettings, не перезаписываем ---
+        if (cam != null && GameSettings.Fov > 1f)
+        {
+            bool sprintNow = moving && Input.GetKey(KeyCode.LeftShift) && !isCrouchingSmooth;
+            float targetFov = Mathf.Min(GameSettings.Fov * (sprintNow ? sprintFovKick : 1f), 100f);
+            cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFov, Time.deltaTime * 6f);
+        }
+    }
+
     void Look()
     {
         float mx = Input.GetAxis("Mouse X") * mouseSensitivity;
@@ -185,13 +231,32 @@ public class Player : MonoBehaviour
                     : sprinting ? walkSpeed * sprintMultiplier
                     : walkSpeed;
 
-        cc.height = crouching ? crouchHeight : standHeight;
+        // плавный присед: высота капсулы ползёт, голова следом (R1)
+        float targetHeight = crouching ? crouchHeight : standHeight;
+        if (targetHeight > cc.height + 0.001f)
+        {
+            // не встаём сквозь потолок
+            Vector3 from = transform.position + Vector3.up * (cc.height - 0.1f);
+            if (Physics.SphereCast(from, cc.radius * 0.9f, Vector3.up, out _,
+                    targetHeight - cc.height + 0.15f, ~0, QueryTriggerInteraction.Ignore))
+                targetHeight = cc.height;
+        }
+        cc.height = Mathf.MoveTowards(cc.height, targetHeight, Time.deltaTime * 6f);
+        isCrouchingSmooth = crouching || cc.height < standHeight - 0.01f;
 
         if (cc.isGrounded)
         {
+            if (!wasGrounded) // приземление: проседание жёстче от скорости падения
+                landOffset = -Mathf.Clamp(-lastFallVel * 0.018f, 0f, landDipMax);
+            wasGrounded = true;
             verticalVel = -2f;
             if (Input.GetKeyDown(KeyCode.Space))
                 verticalVel = Mathf.Sqrt(jumpHeight * -2f * gravity);
+        }
+        else
+        {
+            lastFallVel = Mathf.Min(lastFallVel, verticalVel);
+            wasGrounded = false;
         }
         verticalVel += gravity * Time.deltaTime;
 

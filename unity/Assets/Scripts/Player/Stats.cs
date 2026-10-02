@@ -26,9 +26,15 @@ public class Stats : MonoBehaviour
     [System.NonSerialized] public float lastWarmTime = -10f;
     const float WarmWindowSec = 1f;
 
+    [Header("Яд (§9.3): еда с ядом жрёт HP, пока не выветрится")]
+    public float maxPoison = 100f;
+    public float poisonDecay = 2f;       // ед. яда/сек выветривается
+    public float poisonDps = 1.5f;       // HP/сек, пока яд > 0
+
     public float Hp { get; private set; }
     public float Food { get; private set; }
     public float Water { get; private set; }
+    public float Poison { get; private set; }
     public bool IsDead { get; private set; }
 
     bool isNight;
@@ -55,7 +61,14 @@ public class Stats : MonoBehaviour
         if (Food <= 0f) Damage(starveDamage * dt);
         if (Water <= 0f) Damage(thirstDamage * dt);
 
-        if (!IsDead && Food > regenMinStat && Water > regenMinStat)
+        // яд: выветривается, пока есть — жрёт HP и блокирует реген
+        if (Poison > 0f)
+        {
+            Poison = Mathf.Max(0f, Poison - poisonDecay * dt);
+            Damage(poisonDps * dt);
+        }
+
+        if (!IsDead && Poison <= 0f && Food > regenMinStat && Water > regenMinStat)
             Hp = Mathf.Min(maxHp, Hp + regenRate * dt);
 
         GameEvents.RaiseStatsChanged();
@@ -70,12 +83,17 @@ public class Stats : MonoBehaviour
         GameEvents.RaiseStatsChanged();
     }
 
-    public void Eat(float food, float water, float heal)
+    public void Eat(float food, float water, float heal, float poison = 0f)
     {
         if (IsDead) return;
         Food = Mathf.Min(maxFood, Food + food);
         Water = Mathf.Min(maxWater, Water + water);
         Hp = Mathf.Min(maxHp, Hp + heal);
+        if (poison > 0f)
+        {
+            Poison = Mathf.Min(maxPoison, Poison + poison);
+            GameEvents.RaiseNotify("Отравление!");
+        }
         GameEvents.RaiseStatsChanged();
     }
 

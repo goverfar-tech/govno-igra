@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -97,10 +98,10 @@ public static class SetupMainScene
         var wood = SyncItem("wood", "Древесина", 30, worldModel: "resource-wood");
         var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
         var berry = SyncItem("berry", "Ягода", 20, food: 12f);
-        var meat = SyncItem("meat", "Сырое мясо", 10, food: 25f);
-        SyncItem("cooked_meat", "Жаркое", 10, food: 45f);
-        var axe = SyncItem("axe", "Каменный топор", 1, isTool: true, toolDamage: 8f, worldModel: "tool-axe");
-        var pickaxe = SyncItem("pickaxe", "Кирка", 1, isTool: true, toolDamage: 5f, worldModel: "tool-pickaxe");
+        var meat = SyncItem("meat", "Сырая плоть", 10, food: 12f, poison: 30f);      // §9.3: мало + яд
+        SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f);              // готовка режет яд
+        var egg = SyncItem("egg", "Яйцо", 10, food: 8f);
+        var mayo = SyncItem("mayo", "Домашний майонез", 10, food: 35f, heal: 5f);   // чистая еда §9.3
         var spear = SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
         var campfire = SyncItem("campfire", "Костёр", 5, isPlaceable: true, placeablePrefab: campfirePrefab);
         var wall = SyncItem("wall", "Деревянная стена", 10, isPlaceable: true, placeablePrefab: wallPrefab);
@@ -124,15 +125,9 @@ public static class SetupMainScene
         }
         playerGo.GetComponent<Inventory>().pickupPrefab = pickupPrefabAsset; // для выброса по ПКМ
 
-        // --- стартовый тайник у спауна: фляга, инструменты, еда ---
-        // (для M2-теста; при M4 всё это заменится находками в мире)
-        SpawnPickup(pickupPrefabAsset, flask, 1, OnGround(1.5f, 2f, 0.3f));
-        SpawnPickup(pickupPrefabAsset, axe, 1, OnGround(2.2f, 2.8f, 0.3f));
-        SpawnPickup(pickupPrefabAsset, pickaxe, 1, OnGround(2.9f, 3.6f, 0.3f));
-        SpawnPickup(pickupPrefabAsset, spear, 1, OnGround(3.6f, 4.4f, 0.3f));
-        SpawnPickup(pickupPrefabAsset, meat, 2, OnGround(0.8f, 3f, 0.3f));
-        SpawnPickup(pickupPrefabAsset, campfire, 1, OnGround(1.5f, 4f, 0.3f));
-        SpawnPickup(pickupPrefabAsset, wall, 3, OnGround(0.3f, 4.2f, 0.3f));
+        // --- у спауна только случайная пустая фляга (тайник снесён,
+        // экономика — крафт; аудит механик 2026-10) ---
+        SpawnPickup(pickupPrefabAsset, flaskEmpty, 1, OnGround(1.5f, 2f, 0.3f));
 
         // --- мир M4: рассеивание по seed + озеро ---
         var rng = new System.Random(1337);
@@ -149,7 +144,6 @@ public static class SetupMainScene
             tc.radius = 0.3f;
             var tn = t.AddComponent<ResourceNode>();
             tn.yield = wood; tn.hitsLeft = 3; tn.pickupPrefab = pickupPrefabAsset;
-            tn.requiredToolId = "axe";
         }
 
         // камни (12 шт)
@@ -164,7 +158,6 @@ public static class SetupMainScene
             rc.size = new Vector3(1.2f, 1f, 1.2f);
             var rn = r.AddComponent<ResourceNode>();
             rn.yield = stone; rn.hitsLeft = 3; rn.pickupPrefab = pickupPrefabAsset;
-            rn.requiredToolId = "pickaxe";
         }
 
         // ягодные кусты (10 шт, пикап ягоды на кусте)
@@ -206,69 +199,27 @@ public static class SetupMainScene
         waterSource.emptyFlask = flaskEmpty;
         waterSource.fullFlask = flask;
 
-        // --- демо-узел у спауна (дублирует рассеивание, для быстрого теста) ---
-        var tree = SpawnModel("tree", new Vector3(4f, TerrainGen.HeightAt(4f, -3f), -3f), "Tree", 3.2f);
-        if (tree == null) tree = SpawnModel("tree-tall", OnGround(4f, -3f), "Tree", 3.2f);
-        if (tree != null)
-        {
-            var col = tree.AddComponent<CapsuleCollider>();
-            col.center = new Vector3(0f, 1.3f, 0f); // как в Godot-версии
-            col.height = 2.6f;
-            col.radius = 0.3f;
-            var node = tree.AddComponent<ResourceNode>();
-            node.yield = wood;
-            node.hitsLeft = 3;
-            node.pickupPrefab = pickupPrefabAsset;
-            node.requiredToolId = "axe";
-        }
-        else missing.AppendLine("tree / tree-tall");
-
-        // --- камень-жилка ---
-        var rock = SpawnModel("resource-stone-large", OnGround(-4f, 2f), "StoneNode", 1.8f);
-        if (rock == null) rock = SpawnModel("rock-a", OnGround(-4f, 2f), "StoneNode", 1.8f);
-        if (rock != null)
-        {
-            var col = rock.AddComponent<BoxCollider>();
-            col.center = new Vector3(0f, 0.5f, 0f);
-            col.size = new Vector3(1.2f, 1f, 1.2f);
-            var node = rock.AddComponent<ResourceNode>();
-            node.yield = stone;
-            node.hitsLeft = 3;
-            node.pickupPrefab = pickupPrefabAsset;
-            node.requiredToolId = "pickaxe";
-        }
-        else missing.AppendLine("resource-stone-large / rock-a");
 
 
-        // --- куст ягод (пикап ягоды рядом) ---
-        if (SpawnModel("grass-large", OnGround(2f, 4f), "Bush", 2f) == null)
-        {
-            // модель травы не нашлась — заменяем зелёным кустом-примитивом
-            var bush = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            bush.name = "Bush";
-            bush.transform.position = OnGround(2f, 4f, 0.4f);
-            bush.transform.localScale = Vector3.one * 0.8f;
-            Object.DestroyImmediate(bush.GetComponent<SphereCollider>());
-            bush.GetComponent<MeshRenderer>().sharedMaterial = CreateMaterial("Bush", new Color(0.2f, 0.45f, 0.15f));
-        }
-        var berryPos = OnGround(2f, 4f, 0.5f);
-        var berryGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        berryGo.name = "BerryPickup";
-        berryGo.transform.position = berryPos;
-        berryGo.transform.localScale = Vector3.one * 0.25f;
-        var berryCol = berryGo.GetComponent<SphereCollider>();
-        berryCol.isTrigger = true;
-        var berryPickup = berryGo.AddComponent<PickupItem>();
-        berryPickup.item = berry;
-        berryPickup.count = 2;
-        var berryMat = CreateMaterial("Berry", new Color(0.7f, 0.1f, 0.2f));
-        berryGo.GetComponent<MeshRenderer>().sharedMaterial = berryMat;
 
         // --- зомби-спавнер (M5): 3 зомби каждую ночь кольцом вокруг игрока ---
         var spawnerGo = new GameObject("ZombieSpawner");
         var spawner = spawnerGo.AddComponent<ZombieSpawner>();
         spawner.dropItem = meat; // с зомби падает сырая плоть
         spawner.pickupPrefab = pickupPrefabAsset;
+
+        // --- курица (§9.3): одна, вдали от спауна, яйца → домашний майонез ---
+        var chickenPos = RandomPos(rng, 60f, 85f);
+        var chickenGo = new GameObject("Chicken");
+        chickenGo.transform.position = chickenPos;
+        var chickenCC = chickenGo.AddComponent<CharacterController>();
+        chickenCC.height = 1f; chickenCC.radius = 0.35f; chickenCC.center = new Vector3(0f, 0.5f, 0f);
+        var chicken = chickenGo.AddComponent<Chicken>();
+        chicken.eggItem = egg;
+        chicken.pickupPrefab = pickupPrefabAsset;
+
+        // --- рецепт домашнего майонеза (§9.3): яйца x2 ---
+        SyncRecipe("mayo", mayo, 1, (egg, 2));
 
         // --- сохранить сцену и добавить в Build Settings ---
         EnsureFolder("Assets/Scenes");
@@ -289,7 +240,8 @@ public static class SetupMainScene
     static ItemData SyncItem(string id, string displayName, int maxStack,
         float food = 0f, float water = 0f, float heal = 0f,
         ItemData consumeReturns = null, bool isTool = false, float toolDamage = 0f,
-        bool isPlaceable = false, string worldModel = null, GameObject placeablePrefab = null)
+        bool isPlaceable = false, string worldModel = null, GameObject placeablePrefab = null,
+        float poison = 0f)
     {
         // Предметы живут в Resources/Items — SaveSystem грузит их по id
         // рантаймом. Старые ассеты из Assets/Items переносим, не создавая дублей.
@@ -309,6 +261,7 @@ public static class SetupMainScene
         item.foodRestore = food;
         item.waterRestore = water;
         item.healAmount = heal;
+        item.poisonAmount = poison;
         item.consumeReturns = consumeReturns;
         item.isTool = isTool;
         item.toolDamage = toolDamage;
@@ -482,6 +435,25 @@ public static class SetupMainScene
         // коллайдер у примитива свой; дублировать на root не нужно
 
         return PrefabUtility.SaveAsPrefabAsset(root, path);
+    }
+
+    // Рецепт-ассет в Resources/Recipes (UI грузит LoadAll). Отдельно от
+    // RecipeBaker'а потока В — не конфликтуем, id не пересекаются.
+    static void SyncRecipe(string id, ItemData result, int resultCount, params (ItemData item, int n)[] inputs)
+    {
+        EnsureFolder("Assets/Resources/Recipes");
+        string path = $"Assets/Resources/Recipes/{id}.asset";
+        var recipe = AssetDatabase.LoadAssetAtPath<RecipeData>(path);
+        bool created = recipe == null;
+        if (created) recipe = ScriptableObject.CreateInstance<RecipeData>();
+        recipe.result = result;
+        recipe.resultCount = resultCount;
+        var ings = new List<RecipeData.Ingredient>();
+        foreach (var (item, n) in inputs)
+            ings.Add(new RecipeData.Ingredient { item = item, count = n });
+        recipe.inputs = ings.ToArray();
+        if (created) AssetDatabase.CreateAsset(recipe, path);
+        else EditorUtility.SetDirty(recipe);
     }
 
     static void EnsureFolder(string path)

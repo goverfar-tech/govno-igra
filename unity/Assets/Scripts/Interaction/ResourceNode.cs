@@ -15,17 +15,17 @@ public class ResourceNode : MonoBehaviour, IInteractable
     public string GetPrompt()
     {
         if (yield == null) return "[E] Добыть";
-        string hint = requiredToolId == "axe" ? " • топор быстрее"
-                    : requiredToolId == "pickaxe" ? " • кирка быстрее" : "";
-        return $"[E] Добыть: {yield.displayName} (осталось: {hitsLeft}){hint}";
+        if (hitsLeft <= 0) return "Обобрано"; // дерево/камень остаются навсегда
+        return $"[E] Добыть: {yield.displayName} (осталось: {hitsLeft})";
     }
 
     public void Interact(Player player) => Hit(player, 1);
 
-    // Удар по узлу; инструменты бьют сильнее (Godot-эталон: топор = 2).
+    // Сбор руками: limit исчерпуем, но узел НЕ исчезает (§аудит:
+    // инструменты вырезаны — дерево просто обдирается).
     public void Hit(Player player, int amount)
     {
-        if (yield == null || player == null) return;
+        if (yield == null || player == null || hitsLeft <= 0) return;
         hitsLeft -= amount;
 
         // Добыча сразу в инвентарь; не влезло — падает пикапом перед игроком
@@ -39,6 +39,10 @@ public class ResourceNode : MonoBehaviour, IInteractable
             drop.count = leftover;
         }
 
-        if (hitsLeft <= 0) Destroy(gameObject);
+        if (hitsLeft <= 0)
+        {
+            hitsLeft = 0;
+            GameEvents.RaiseNotify("Обобрано: " + (yield != null ? yield.displayName : ""));
+        }
     }
 }

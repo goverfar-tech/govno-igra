@@ -102,7 +102,8 @@ public class Player : MonoBehaviour
 
     float swingCooldown;
 
-    // Замах инструментом: бьёт зомби на toolDamage, узлы добычи — на 2.
+    // Замах оружием: бьёт зомби на toolDamage. Инструментов для добычи
+    // больше нет (аудит 2026-10): деревья/камни обдираются руками по E.
     bool SwingTool(ItemData item)
     {
         if (swingCooldown > 0f) return true;
@@ -114,19 +115,6 @@ public class Player : MonoBehaviour
         {
             var zombie = hit.collider.GetComponentInParent<Zombie>();
             if (zombie != null) { zombie.TakeDamage(item.toolDamage); return true; }
-
-            var node = hit.collider.GetComponentInParent<ResourceNode>();
-            if (node != null)
-            {
-                // привязка инструмента (Godot: «Здесь нужен другой инструмент»)
-                if (node.requiredToolId != "" && node.requiredToolId != item.id)
-                {
-                    GameEvents.RaiseNotify("Здесь нужен другой инструмент");
-                    return true;
-                }
-                node.Hit(this, 2);
-                return true;
-            }
         }
         return true;
     }

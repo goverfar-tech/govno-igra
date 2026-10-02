@@ -16,6 +16,9 @@ public class ItemData : ScriptableObject
     public float foodRestore;       // восстановление сытости
     public float waterRestore;      // восстановление жажды
     public float healAmount;        // восстановление HP
+    // Яд §9.3: сырая плоть/мутный майонез — еда + poison; яд жрёт HP,
+    // пока не выветрится. 0 = чистая еда.
+    public float poisonAmount;
     // Что возвращается после использования (фляга: полная → пустая)
     public ItemData consumeReturns;
 

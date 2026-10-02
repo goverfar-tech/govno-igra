@@ -65,7 +65,7 @@ public class Inventory : MonoBehaviour
         var s = SelectedSlot;
         if (s.IsEmpty || !s.item.IsConsumable) return;
         var item = s.item;
-        player.Stats.Eat(item.foodRestore, item.waterRestore, item.healAmount);
+        player.Stats.Eat(item.foodRestore, item.waterRestore, item.healAmount, item.poisonAmount);
         s.count--;
         if (s.count <= 0) { s.item = null; s.count = 0; }
         ConsumeReturns(item.consumeReturns);

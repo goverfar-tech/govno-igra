@@ -5,12 +5,25 @@ public class WaterSource : MonoBehaviour, IInteractable
 {
     public ItemData emptyFlask;
     public ItemData fullFlask;
+    [Header("Баланс: лужа мелеет после наполнения, иначе бесконечные ресурсы")]
+    public float refillCooldown = 120f;
 
-    public string GetPrompt() => "[E] Наполнить флягу";
+    float nextFillTime;
+
+    public string GetPrompt()
+    {
+        float left = nextFillTime - Time.time;
+        return left > 0f ? $"Лужа мелеет… (ещё {Mathf.CeilToInt(left)} с)" : "[E] Наполнить флягу";
+    }
 
     public void Interact(Player player)
     {
         if (player == null || emptyFlask == null || fullFlask == null) return;
+        if (Time.time < nextFillTime)
+        {
+            GameEvents.RaiseNotify("Лужа слишком мелкая — зайди позже");
+            return;
+        }
         if (player.Inventory.CountOf(emptyFlask) <= 0)
         {
             GameEvents.RaiseNotify("Нужна пустая фляга");
@@ -23,10 +36,9 @@ public class WaterSource : MonoBehaviour, IInteractable
         {
             player.Inventory.Add(emptyFlask, 1); // не влезло — вернуть пустую
             GameEvents.RaiseNotify("Инвентарь полон");
+            return;
         }
-        else
-        {
-            GameEvents.RaiseNotify("Фляга наполнена");
-        }
+        nextFillTime = Time.time + refillCooldown;
+        GameEvents.RaiseNotify("Фляга наполнена");
     }
 }

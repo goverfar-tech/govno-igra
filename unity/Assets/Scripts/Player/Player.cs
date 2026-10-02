@@ -86,7 +86,17 @@ public class Player : MonoBehaviour
         UpdateInteractFocus();
 
         if (Input.GetKeyDown(KeyCode.E) && focus != null)
+        {
+            // отклик рубки рукой (R3): звук удара + микро-кивок камеры;
+            // если узел уже обобран — не звучим (подсказка «Обобрано»)
+            if (focus is ResourceNode rn && rn.hitsLeft > 0)
+            {
+                AudioManager.Swing();
+                GameEvents.RaiseWorldHit(rn.transform.position);
+                landOffset = Mathf.Max(landOffset - 0.045f, -0.09f);
+            }
             focus.Interact(this);
+        }
 
         if (Input.GetMouseButtonDown(0))
             UseSelected();
@@ -121,13 +131,20 @@ public class Player : MonoBehaviour
     {
         if (swingCooldown > 0f) return true;
         swingCooldown = 0.6f;
+        AudioManager.Swing(); // замах слышен всегда
+        landOffset = Mathf.Max(landOffset - 0.05f, -0.1f);
 
         var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
         if (Physics.Raycast(origin, (head != null ? head.forward : transform.forward),
                 out var hit, 3f, interactMask))
         {
             var zombie = hit.collider.GetComponentInParent<Zombie>();
-            if (zombie != null) { zombie.TakeDamage(item.toolDamage); return true; }
+            if (zombie != null)
+            {
+                zombie.TakeDamage(item.toolDamage);
+                GameEvents.RaiseWorldHit(hit.point);
+                return true;
+            }
         }
         return true;
     }

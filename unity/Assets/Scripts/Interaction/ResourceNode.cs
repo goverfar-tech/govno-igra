@@ -43,6 +43,24 @@ public class ResourceNode : MonoBehaviour, IInteractable
         {
             hitsLeft = 0;
             GameEvents.RaiseNotify("Обобрано: " + (yield != null ? yield.displayName : ""));
+            GreyOut(); // визуально пустой — читается издалека (R3)
+        }
+    }
+
+    // Перекрашиваем модель в тускло-серый. GLB-материалы одни на все
+    // инстансы этого глба — поэтому ДЕЛАЕМ КОПИИ (r.material), иначе
+    // посерели бы все деревья разом.
+    void GreyOut()
+    {
+        foreach (var r in GetComponentsInChildren<MeshRenderer>())
+        {
+            var mats = r.materials; // инстанцирует копии
+            for (int i = 0; i < mats.Length; i++)
+            {
+                var c = mats[i].color;
+                mats[i].color = Color.Lerp(c, new Color(0.35f, 0.33f, 0.3f), 0.7f);
+            }
+            r.materials = mats;
         }
     }
 }

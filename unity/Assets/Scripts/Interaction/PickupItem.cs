@@ -7,6 +7,36 @@ public class PickupItem : MonoBehaviour, IInteractable
     public ItemData item;
     [Min(1)] public int count = 1;
 
+    // Блик над предметом (R3): маленькая светящаяся точка, пульсирует,
+    // чтобы пикапы находились глазами в траве/сумерках.
+    static Material glintMat;
+    Transform glint;
+
+    void Start()
+    {
+        if (glintMat == null)
+        {
+            glintMat = new Material(Shader.Find("Standard"))
+                { color = new Color(1f, 0.95f, 0.6f) };
+            glintMat.EnableKeyword("_EMISSION");
+            glintMat.SetColor("_EmissionColor", new Color(1f, 0.9f, 0.5f) * 1.5f);
+        }
+        var g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Destroy(g.GetComponent<SphereCollider>());
+        g.transform.SetParent(transform, false);
+        g.transform.localPosition = Vector3.up * 0.8f;
+        g.transform.localScale = Vector3.one * 0.12f;
+        g.name = "Glint";
+        g.GetComponent<MeshRenderer>().sharedMaterial = glintMat;
+        glint = g.transform;
+    }
+
+    void Update()
+    {
+        if (glint != null)
+            glint.localScale = Vector3.one * (0.12f + Mathf.Sin(Time.time * 4f) * 0.03f);
+    }
+
     public string GetPrompt()
         => item != null ? $"[E] Взять: {item.displayName} ×{count}" : "[E] Взять";
 

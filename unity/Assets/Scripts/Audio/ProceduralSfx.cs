@@ -186,22 +186,30 @@ public static class ProceduralSfx
         return MakeClip("sfx_gurgle", f);
     }
 
-    // Стинг гибели игрока: низкий падающий вой с шумовым хвостом.
+    // Стинг гибели игрока: низкий провальный «бум» (72→26 Гц) + дребезг —
+    // короткая серия шумовых щелчков с затуханием, как содрогание ведра.
     public static AudioClip MakeDeathSting()
     {
-        float dur = 1.4f;
+        float dur = 1.6f;
         int n = Mathf.RoundToInt(SampleRate * dur);
         var f = new float[n];
-        float phase = 0f, prev = 0f;
+        float phase = 0f;
         for (int i = 0; i < n; i++)
         {
             float t = (float)i / SampleRate;
-            float env = Mathf.Exp(-2.2f * t);
-            float freq = Mathf.Lerp(240f, 38f, Mathf.Pow(t / dur, 0.7f));
+            float env = Mathf.Exp(-3.2f * t);
+            float freq = Mathf.Lerp(72f, 26f, Mathf.Pow(t / dur, 0.8f));
             phase += freq * Mathf.PI * 2f / SampleRate;
-            float tone = Mathf.Sin(phase) * 0.55f + Mathf.Sin(phase * 0.5f) * 0.22f;
-            prev = prev * 0.9f + White() * 0.1f;
-            f[i] = (tone + prev * 0.5f) * env * 0.5f;
+            f[i] = (Mathf.Sin(phase) * 0.7f + Mathf.Sin(phase * 0.5f) * 0.3f) * env * 0.6f;
+        }
+        // дребезг: 8 щелчков с шагом ~55 мс, каждый слабее предыдущего
+        for (int k = 0; k < 8; k++)
+        {
+            int s0 = Mathf.RoundToInt((0.02f + k * 0.055f + Random.value * 0.015f) * SampleRate);
+            int m = Mathf.RoundToInt(SampleRate * 0.04f);
+            float amp = 0.35f * (1f - k / 9f);
+            for (int j = 0; j < m && s0 + j < n; j++)
+                f[s0 + j] += White() * Mathf.Exp(-j / (m * 0.35f)) * amp;
         }
         return MakeClip("sfx_death", f);
     }
@@ -249,5 +257,87 @@ public static class ProceduralSfx
             f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a);
         }
         return MakeClip("sfx_crackle", f);
+    }
+
+    // Гул-стон зомби: низкий пилящий тон (пила 58 Гц с вибрато, приглаженная
+    // ФНЧ, чтобы пугала, а не резала слух) поверх шумового дыхания. Петля;
+    // «дыхание» делает целое число волн за петлю — шва не слышно. Громкостью
+    // по расстоянию управляет AudioManager.
+    public static AudioClip MakeZombieMoan(float dur = 4f)
+    {
+        int n = Mathf.RoundToInt(SampleRate * dur);
+        var f = new float[n];
+        float phase = 0f, saw = 0f, noise = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / SampleRate;
+            float u = (float)i / n;
+            float freq = 58f * (1f + 0.03f * Mathf.Sin(2f * Mathf.PI * 4.3f * t));
+            phase += freq * Mathf.PI * 2f / SampleRate;
+            float cycles = phase / (Mathf.PI * 2f);
+            float sawRaw = 2f * (cycles - Mathf.Floor(cycles + 0.5f)); // -1..1
+            saw = saw * 0.86f + sawRaw * 0.14f;
+            noise = noise * 0.96f + White() * 0.04f;
+            float swell = 0.65f + 0.35f * Mathf.Sin(2f * Mathf.PI * 2f * u); // 2 волны за петлю
+            f[i] = (saw * 0.5f + noise * 0.6f) * swell * 0.5f;
+        }
+        const int xfade = 2048;
+        for (int i = 0; i < xfade; i++)
+        {
+            float a = (float)i / xfade;
+            f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a);
+        }
+        return MakeClip("sfx_zombie_moan", f);
+    }
+
+    // Сердцебиение: «луб-дуп» в тишине, петля period секунд (~1.2 с между
+    // парами ударов). Включением и громкостью управляет AudioManager.
+    public static AudioClip MakeHeartbeat(float period = 1.2f)
+    {
+        int n = Mathf.RoundToInt(SampleRate * period);
+        var f = new float[n];
+        AddThump(f, 0.00f, 62f, 44f, 0.10f, 0.9f);
+        AddThump(f, 0.17f, 55f, 40f, 0.09f, 0.55f);
+        return MakeClip("sfx_heartbeat", f);
+    }
+
+    // Один глухой удар сердца: падающий синус с намёком на шум.
+    static void AddThump(float[] f, float at, float from, float to, float dur, float amp)
+    {
+        int s0 = Mathf.RoundToInt(at * SampleRate);
+        int n = Mathf.RoundToInt(SampleRate * dur);
+        float phase = 0f;
+        for (int j = 0; j < n && s0 + j < f.Length; j++)
+        {
+            float t = (float)j / SampleRate;
+            float env = Mathf.Exp(-t * 34f);
+            float freq = Mathf.Lerp(from, to, t / dur);
+            phase += freq * Mathf.PI * 2f / SampleRate;
+            f[s0 + j] += (Mathf.Sin(phase) * 0.8f + White() * 0.05f) * env * amp;
+        }
+    }
+
+    // Далёкий ночной «вскрик» (§9.6): призрачный падающий вой 520→170 Гц
+    // с дрожью и шумовым придыханием. Играется тихо и со stereo-разносом —
+    // непонятно, откуда; это и пугает.
+    public static AudioClip MakeNightCry()
+    {
+        float dur = 1.1f;
+        int n = Mathf.RoundToInt(SampleRate * dur);
+        var f = new float[n];
+        float phase = 0f, prev = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float u = (float)i / n;
+            float t = (float)i / SampleRate;
+            float env = Mathf.Exp(-3.5f * t) * Mathf.Min(1f, t * 9f); // быстрый вход, долгий хвост
+            float freq = Mathf.Lerp(520f, 170f, Mathf.Pow(u, 0.6f))
+                         * (1f + 0.06f * Mathf.Sin(2f * Mathf.PI * 5.7f * t));
+            phase += freq * Mathf.PI * 2f / SampleRate;
+            float tone = Mathf.Sin(phase) * 0.42f + Mathf.Sin(phase * 2.01f) * 0.12f;
+            prev = prev * 0.9f + White() * 0.1f;
+            f[i] = (tone + prev * 0.25f) * env * 0.35f;
+        }
+        return MakeClip("sfx_night_cry", f);
     }
 }

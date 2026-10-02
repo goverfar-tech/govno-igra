@@ -13,8 +13,15 @@ using UnityEngine;
 //   WorldHit          — позиционный «тук» по мировому объекту;
 //   Notify            — едва слышный UI-тик на тосты;
 //   PlayerDied        — стинг гибели;
-//   TimeOfDayChanged  — ночью ветер гуще и тоном выше (§9.6: атмосфера
-//                       важнее реализма).
+//   TimeOfDayChanged  — ночью ветер гуще и тоном выше + редкие далёкие
+//                       вскрики со stereo-разносом (§9.6: атмосфера
+//                       важнее реализма);
+//   StatsChanged      — HP ниже heartbeatHp: глухой стук сердца (петля
+//                       ~1.2 с), тем громче, чем ближе к нулю.
+//
+// Гул-стон зомби (фон): скан сцены раз в ~2.5 с (FindObjectsByType),
+// 2D-петля со слегка дрожащим тоном; громкость — по расстоянию до
+// ближайшего (20 м — тишина, 3 м — полная), стая гул не усиливает.
 //
 // Шаги: находим Player (FindFirstObjectByType), копим пройденный путь по
 // CharacterController.velocity — звук каждые ~1.9 м, как в эталоне.
@@ -55,6 +62,22 @@ public class AudioManager : MonoBehaviour
     public float gurgleMinDist = 12f;  // радиус области вокруг игрока
     public float gurgleMaxDist = 20f;
 
+    [Header("Зомби-гул (2D, по ближайшему живому)")]
+    public float zombieMoanDb = -12f;  // громкость вплотную
+    public float zombieNearDist = 3f;  // ближе — полная
+    public float zombieFarDist = 20f;  // дальше — тишина
+    public float zombieScanInterval = 2.5f;
+
+    [Header("Сердце при низком HP")]
+    public float heartbeatHp = 30f;    // ниже этого порога — стук
+    public float heartbeatMinDb = -24f; // у самого порога
+    public float heartbeatMaxDb = -8f;  // у нуля HP
+
+    [Header("Ночные далёкие вскрики (§9.6)")]
+    public float nightCryDb = -30f;
+    public float nightCryMinGap = 15f;
+    public float nightCryMaxGap = 40f;
+
     [Header("Треск костров (навешивается на объекты с FireLight)")]
     public float crackleDb = -14f;     // громкость у самого костра
     public float crackleMinDist = 2f;
@@ -65,10 +88,14 @@ public class AudioManager : MonoBehaviour
     AudioClip whooshClip, windClip, gruntClip, squealClip;
     AudioClip gurgleClip, deathClip, toastClip;
     AudioClip selectClip, openClip, closeClip, pauseClip, crackleClip;
+    AudioClip moanClip, heartbeatClip, nightCryClip;
 
-    AudioSource flatSource; // 2D одношоты (UI/еда/стинг); pitch ставится перед PlayOneShot
-    AudioSource stepSource; // шаги отдельно — не перебивают UI-звуки pitch'ем
-    AudioSource windSource; // зацикленный ветер
+    AudioSource flatSource;      // 2D одношоты (UI/еда/стинг); pitch ставится перед PlayOneShot
+    AudioSource stepSource;      // шаги отдельно — не перебивают UI-звуки pitch'ем
+    AudioSource windSource;      // зацикленный ветер
+    AudioSource zombieSource;    // зацикленный гул-стон (громкость = близость)
+    AudioSource heartbeatSource; // зацикленный стук сердца
+    AudioSource crySource;       // ночные вскрики: одношоты с panStereo
 
     Player player;
     CharacterController cc;
@@ -81,6 +108,10 @@ public class AudioManager : MonoBehaviour
     float lastSelectSfx = -99f;
     float nextGurgleTime = 12f;
     float nextFireScan = 2f; // первый скан почти сразу — костры на спауне
+    float nextZombieScan = 3f;
+    float moanTarget;        // целевая громкость зомби-гула (линейная)
+    float heartbeatTarget;   // целевая громкость сердца (линейная)
+    float nextNightCryTime = 20f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AutoCreate()
@@ -118,6 +149,7 @@ public class AudioManager : MonoBehaviour
         GameEvents.SelectionChanged += OnSelectionChanged;
         GameEvents.InventoryOpenChanged += OnInventoryOpenChanged;
         GameEvents.PauseChanged += OnPauseChanged;
+        GameEvents.StatsChanged += OnStatsChanged;
     }
 
     void OnDisable()
@@ -131,6 +163,7 @@ public class AudioManager : MonoBehaviour
         GameEvents.SelectionChanged -= OnSelectionChanged;
         GameEvents.InventoryOpenChanged -= OnInventoryOpenChanged;
         GameEvents.PauseChanged -= OnPauseChanged;
+        GameEvents.StatsChanged -= OnStatsChanged;
     }
 
     // ---------- построение ----------
@@ -154,6 +187,9 @@ public class AudioManager : MonoBehaviour
         closeClip = ProceduralSfx.MakeRustle(false);
         pauseClip = ProceduralSfx.MakeBlip("sfx_ui_pause", 420f, 300f, 0.07f);
         crackleClip = ProceduralSfx.MakeCrackle();
+        moanClip = ProceduralSfx.MakeZombieMoan();
+        heartbeatClip = ProceduralSfx.MakeHeartbeat();
+        nightCryClip = ProceduralSfx.MakeNightCry();
     }
 
     void BuildSources()
@@ -173,17 +209,40 @@ public class AudioManager : MonoBehaviour
         windSource.playOnAwake = true;
         windSource.volume = Db(windDayDb);
         windSource.Play();
+
+        zombieSource = gameObject.AddComponent<AudioSource>();
+        zombieSource.clip = moanClip;
+        zombieSource.loop = true;
+        zombieSource.spatialBlend = 0f;
+        zombieSource.playOnAwake = false;
+        zombieSource.volume = 0f;
+
+        heartbeatSource = gameObject.AddComponent<AudioSource>();
+        heartbeatSource.clip = heartbeatClip;
+        heartbeatSource.loop = true;
+        heartbeatSource.spatialBlend = 0f;
+        heartbeatSource.playOnAwake = false;
+        heartbeatSource.volume = 0f;
+
+        crySource = gameObject.AddComponent<AudioSource>();
+        crySource.spatialBlend = 0f;
+        crySource.playOnAwake = false;
     }
 
     // ---------- Update-циклы ----------
 
     void Update()
     {
+        float dt = Time.deltaTime;
         FindPlayer();
-        TickWind(Time.deltaTime);
-        TickFootsteps(Time.deltaTime);
+        TickWind(dt);
+        TickFootsteps(dt);
         TickGurgle();
         TickFireScan();
+        TickZombieScan();
+        TickMoan(dt);
+        TickHeartbeat(dt);
+        TickNightCry();
     }
 
     void FindPlayer()
@@ -272,6 +331,68 @@ public class AudioManager : MonoBehaviour
         }
     }
 
+    // Раз в zombieScanInterval секунд ищем живых зомби (мёртвые и дневные
+    // уничтожаются — см. Zombie.cs, так что любой найденный = живой) и
+    // задаём громкость гула по ближайшему. Стая не громче одиночки.
+    void TickZombieScan()
+    {
+        if (Time.time < nextZombieScan) return;
+        nextZombieScan = Time.time + zombieScanInterval * Random.Range(0.9f, 1.1f);
+
+        moanTarget = 0f;
+        if (player == null || player.Stats.IsDead) return;
+
+        float nearest = float.MaxValue;
+        foreach (var z in FindObjectsByType<Zombie>(FindObjectsSortMode.None))
+        {
+            if (z == null) continue;
+            float d = Vector3.Distance(z.transform.position, player.transform.position);
+            if (d < nearest) nearest = d;
+        }
+        if (nearest >= zombieFarDist) return;
+        moanTarget = Db(zombieMoanDb) * Mathf.SmoothStep(0f, 1f,
+            Mathf.InverseLerp(zombieFarDist, zombieNearDist, nearest));
+    }
+
+    // Петля гула плывёт к цели; пока звучит — тон слегка дрожит.
+    void TickMoan(float dt)
+    {
+        zombieSource.volume = Mathf.MoveTowards(zombieSource.volume, moanTarget, dt * 0.25f);
+        if (moanTarget > 0f && !zombieSource.isPlaying) zombieSource.Play();
+        if (!zombieSource.isPlaying) return;
+        if (moanTarget <= 0f && zombieSource.volume <= 0.001f)
+        {
+            zombieSource.Stop();
+            zombieSource.pitch = 1f;
+            return;
+        }
+        zombieSource.pitch = 1f
+            + 0.035f * Mathf.Sin(Time.time * 2.3f)
+            + 0.02f * Mathf.Sin(Time.time * 0.71f + 1.7f);
+    }
+
+    // Сердце: цель задаёт OnStatsChanged, здесь — плавный вход/выход.
+    void TickHeartbeat(float dt)
+    {
+        heartbeatSource.volume = Mathf.MoveTowards(heartbeatSource.volume, heartbeatTarget, dt * 0.5f);
+        if (heartbeatTarget > 0f && !heartbeatSource.isPlaying) heartbeatSource.Play();
+        else if (heartbeatTarget <= 0f && heartbeatSource.volume <= 0.001f && heartbeatSource.isPlaying)
+            heartbeatSource.Stop();
+    }
+
+    // Редкие далёкие вскрики/чавканье ночью (§9.6): тихо, со случайным
+    // stereo-разносом — источник не локализуется, тем и жутко.
+    void TickNightCry()
+    {
+        if (Time.time < nextNightCryTime) return;
+        nextNightCryTime = Time.time + Random.Range(nightCryMinGap, nightCryMaxGap);
+        if (!isNight || player == null || player.Stats.IsDead) return;
+
+        crySource.panStereo = Random.Range(-0.85f, 0.85f);
+        crySource.pitch = Random.Range(0.85f, 1.2f);
+        crySource.PlayOneShot(nightCryClip, Db(nightCryDb));
+    }
+
     // ---------- обработчики GameEvents ----------
 
     void OnInventoryChanged()
@@ -300,11 +421,28 @@ public class AudioManager : MonoBehaviour
 
     void OnPlayerDied()
     {
+        heartbeatTarget = 0f; // сердцу всё
+        moanTarget = 0f;
         flatSource.pitch = 1f;
         flatSource.PlayOneShot(deathClip, Db(deathDb));
     }
 
     void OnTimeOfDayChanged(float t, bool night) => isNight = night;
+
+    // StatsChanged стреляет каждый кадр (Stats.Tick) — обработчик только
+    // пересчитывает целевую громкость сердца, ничего не проигрывая.
+    void OnStatsChanged()
+    {
+        if (player == null || player.Stats == null) return;
+        float hp = player.Stats.Hp;
+        if (player.Stats.IsDead || hp >= heartbeatHp)
+        {
+            heartbeatTarget = 0f;
+            return;
+        }
+        float severity = 1f - hp / heartbeatHp; // 0 у порога, 1 у нуля
+        heartbeatTarget = Db(Mathf.Lerp(heartbeatMinDb, heartbeatMaxDb, severity));
+    }
 
     // Короткий «тик» при смене слота (колёсико может дать серию за кадр —
     // режем дросселем, иначе звук складывается в пулемётную очередь).

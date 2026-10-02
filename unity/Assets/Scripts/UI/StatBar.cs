@@ -35,6 +35,11 @@ public class StatBar : MonoBehaviour
         return bar;
     }
 
+    public void SetFillColor(Color c)
+    {
+        if (fill != null) fill.color = c;
+    }
+
     public void Set(float value, float max)
     {
         if (fill == null) return;

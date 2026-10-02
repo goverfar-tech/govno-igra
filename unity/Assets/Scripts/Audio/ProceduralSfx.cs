@@ -259,6 +259,27 @@ public static class ProceduralSfx
         return MakeClip("sfx_crackle", f);
     }
 
+    // Чавкающая утечка ведра (R2): мокрый LP-шум + редкие пузыри.
+    // Петля, края сшиты кроссфейдом.
+    public static AudioClip MakeSquelch(float dur = 3f)
+    {
+        int n = Mathf.RoundToInt(SampleRate * dur);
+        var f = new float[n];
+        float bed = 0f, blob = 0f, phase = 0f, blobFreq = 400f;
+        for (int i = 0; i < n; i++)
+        {
+            bed = bed * 0.97f + White() * 0.03f;
+            if (Random.value < 0.0016f) { blob = Random.Range(0.4f, 0.9f); blobFreq = Random.Range(250f, 650f); }
+            phase += blobFreq * 6f / SampleRate;
+            float b = blob > 0.001f ? Mathf.Sin(phase * Mathf.PI * 2f) * blob * 0.45f : 0f;
+            blob *= 0.995f;
+            f[i] = bed * 0.5f + b;
+        }
+        const int xfade = 1024;
+        for (int i = 0; i < xfade; i++) { float a = (float)i / xfade; f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a); }
+        return MakeClip("sfx_squelch", f);
+    }
+
     // Гул-стон зомби: низкий пилящий тон (пила 58 Гц с вибрато, приглаженная
     // ФНЧ, чтобы пугала, а не резала слух) поверх шумового дыхания. Петля;
     // «дыхание» делает целое число волн за петлю — шва не слышно. Громкостью

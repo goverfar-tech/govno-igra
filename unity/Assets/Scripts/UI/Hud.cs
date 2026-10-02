@@ -259,6 +259,12 @@ public class Hud : MonoBehaviour
         // §9.2: ведро = здоровье+сытость слились в «Майонез». Яд — статус.
         // Третья полоска: небесные часы (сколько суток прошло, полная=ночь).
         mayoBar.Set(stats.Mayo, stats.maxMayo);
+        // пустеющее ведро мигает красным — смерть должна читаться заранее
+        bool low = stats.Mayo / stats.maxMayo < 0.25f;
+        mayoBar.SetFillColor(low
+            ? Color.Lerp(UiWidgets.FoodColor, new Color(0.95f, 0.25f, 0.2f),
+                         (Mathf.Sin(Time.unscaledTime * 6f) + 1f) * 0.5f)
+            : UiWidgets.FoodColor);
         poisonBar.Set(stats.Poison, stats.maxPoison);
         timeBar.Set(timeOfDay, 1f);
     }

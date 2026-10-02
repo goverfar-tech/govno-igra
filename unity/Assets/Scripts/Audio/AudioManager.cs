@@ -93,6 +93,12 @@ public class AudioManager : MonoBehaviour
     AudioSource flatSource;      // 2D одношоты (UI/еда/стинг); pitch ставится перед PlayOneShot
     AudioSource stepSource;      // шаги отдельно — не перебивают UI-звуки pitch'ем
     AudioSource windSource;      // зацикленный ветер
+
+    [Header("Плеск утечки ведра (R2)")]
+    public float leakWalkDb = -32f;    // шёл — еле слышно
+    public float leakSprintDb = -18f;  // бежал — плещет в оборотах
+    AudioClip squelchClip;
+    AudioSource squelchSource;
     AudioSource zombieSource;    // зацикленный гул-стон (громкость = близость)
     AudioSource heartbeatSource; // зацикленный стук сердца
     AudioSource crySource;       // ночные вскрики: одношоты с panStereo
@@ -190,6 +196,7 @@ public class AudioManager : MonoBehaviour
         moanClip = ProceduralSfx.MakeZombieMoan();
         heartbeatClip = ProceduralSfx.MakeHeartbeat();
         nightCryClip = ProceduralSfx.MakeNightCry();
+        squelchClip = ProceduralSfx.MakeSquelch();
     }
 
     void BuildSources()
@@ -227,6 +234,14 @@ public class AudioManager : MonoBehaviour
         crySource = gameObject.AddComponent<AudioSource>();
         crySource.spatialBlend = 0f;
         crySource.playOnAwake = false;
+
+        squelchSource = gameObject.AddComponent<AudioSource>(); // плеск утечки (R2)
+        squelchSource.clip = squelchClip;
+        squelchSource.loop = true;
+        squelchSource.spatialBlend = 0f;
+        squelchSource.playOnAwake = false;
+        squelchSource.volume = 0f;
+        squelchSource.Play();
     }
 
     // ---------- Update-циклы ----------
@@ -243,6 +258,7 @@ public class AudioManager : MonoBehaviour
         TickMoan(dt);
         TickHeartbeat(dt);
         TickNightCry();
+        TickLeak(dt);
     }
 
     void FindPlayer()
@@ -256,6 +272,22 @@ public class AudioManager : MonoBehaviour
 
     // Ветер дышит к ночи: громкость и тон ползут к ночным значениям
     // (сам клип зациклен; смена плавная, без щелчков на закате/рассвете).
+    // Ведро плещет при движении: ходьба — тихо, бег — отчётливо (R2/§9.2).
+    void TickLeak(float dt)
+    {
+        if (player == null || cc == null || squelchSource == null) return;
+        Vector3 v = cc.velocity; v.y = 0f;
+        float speed = v.magnitude;
+        float target = 0f;
+        if (!player.Stats.IsDead && speed >= minStepSpeed && cc.isGrounded)
+        {
+            bool sprinting = speed > player.walkSpeed * 1.15f;
+            target = Db(sprinting ? leakSprintDb : leakWalkDb)
+                     * Mathf.Clamp01(speed / player.walkSpeed);
+        }
+        squelchSource.volume = Mathf.MoveTowards(squelchSource.volume, target, dt * 0.5f);
+    }
+
     void TickWind(float dt)
     {
         float targetVol = Db(isNight ? windNightDb : windDayDb);

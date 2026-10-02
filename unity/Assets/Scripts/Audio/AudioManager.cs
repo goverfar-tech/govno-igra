@@ -34,8 +34,8 @@ public class AudioManager : MonoBehaviour
     public static AudioManager Instance { get; private set; }
 
     [Header("Громкости (dB, значения из Godot-эталона)")]
-    public float windDayDb = -34f;
-    public float windNightDb = -22f;   // ночью гул заметно гуще
+    public float windDayDb = -42f;   // было -34: бил по ушам постоянным фоном
+    public float windNightDb = -31f;   // ночью гуще, но не заглушает шаги/зомби
     public float stepWalkDb = -19f;
     public float stepCrouchDb = -22f;
     public float stepSprintDb = -12f;  // эталон -17; плеск — часть стелс-механики

@@ -130,7 +130,7 @@ public static class ProceduralSfx
             lpSlow = lpSlow * 0.998f + white * 0.002f;
             float gustPhase = 2f * Mathf.PI * 0.09f * t + 1.3f * Mathf.Sin(t * 0.23f);
             float gust = Mathf.Pow(0.5f + 0.5f * Mathf.Sin(gustPhase), 2f);
-            float whistle = (lpFast - lpSlow) * gust * 2.4f;
+            float whistle = (lpFast - lpSlow) * gust * 1.4f; // было 2.4: порывы прорывались поверх геймплея
 
             f[i] = prev * amp + whistle;
         }

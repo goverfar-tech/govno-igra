@@ -95,8 +95,8 @@ public class AudioManager : MonoBehaviour
     AudioSource windSource;      // зацикленный ветер
 
     [Header("Плеск утечки ведра (R2)")]
-    public float leakWalkDb = -32f;    // шёл — еле слышно
-    public float leakSprintDb = -18f;  // бежал — плещет в оборотах
+    public float leakWalkDb = -36f;    // шёл — почти неслышно
+    public float leakSprintDb = -22f;  // бежал — плещет, но не заглушает
     AudioClip squelchClip;
     AudioSource squelchSource;
     AudioSource zombieSource;    // зацикленный гул-стон (громкость = близость)

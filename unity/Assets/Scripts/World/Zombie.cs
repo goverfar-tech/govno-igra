@@ -22,6 +22,9 @@ public class Zombie : MonoBehaviour
     Vector3 wanderTarget;
     float repickTarget;
     float sniffTimer;
+    Vector3 lastKnown;          // где видели игрока в последний раз
+    float searchTimer;          // сколько ещё «отслеживаем» после потери из виду
+    const float SearchTime = 8f;
     CharacterController cc;
     Player player;
     bool isNight;
@@ -59,13 +62,33 @@ public class Zombie : MonoBehaviour
         {
             case State.Idle:
             case State.Wander:
-                if (dist < noticeRange && isNight) { state = State.Chase; break; }
+                // преследование начинается с ЗРЕНИЯ (LOS), не по следу
+                if (dist < noticeRange && isNight && CanSeePlayer())
+                {
+                    state = State.Chase;
+                    lastKnown = player.transform.position;
+                    searchTimer = SearchTime;
+                    break;
+                }
                 Wander();
                 break;
             case State.Chase:
-                if (dist > noticeRange * 1.6f) { state = State.Wander; break; }
                 if (dist < attackRange) { state = State.Attack; break; }
-                MoveTowards(player.transform.position, chaseSpeed);
+                if (CanSeePlayer())
+                {
+                    lastKnown = player.transform.position;
+                    searchTimer = SearchTime;
+                    MoveTowards(player.transform.position, chaseSpeed);
+                    break;
+                }
+                // потерял из виду: к последней точке, по пути «отслеживаем»
+                // свежий след (ограниченное время), потом сдаёмся
+                searchTimer -= Time.deltaTime;
+                if (searchTimer <= 0f) { state = State.Wander; break; }
+                if (MayoTrail.Instance != null &&
+                    MayoTrail.Instance.FreshestNear(transform.position, 20f, out var scent))
+                    lastKnown = scent;
+                MoveTowards(lastKnown, chaseSpeed);
                 break;
             case State.Attack:
                 if (dist > attackRange * 1.3f) { state = State.Chase; break; }
@@ -83,6 +106,19 @@ public class Zombie : MonoBehaviour
         cc.Move(Physics.gravity * Time.deltaTime);
     }
 
+    // Зрение: луч до игрока, триггеры и свои части не мешают.
+    bool CanSeePlayer()
+    {
+        if (player == null) return false;
+        Vector3 from = transform.position + Vector3.up * 1.5f;
+        Vector3 to = player.transform.position + Vector3.up * 1.4f;
+        Vector3 dir = to - from;
+        if (Physics.Raycast(from, dir, out var hit, dir.magnitude + 0.5f,
+                ~0, QueryTriggerInteraction.Ignore))
+            return hit.collider.GetComponentInParent<Player>() != null;
+        return false;
+    }
+
     void Wander()
     {
         // нюх: ночью зомби тянет к свежему майонезному следу (§9.2)
@@ -91,7 +127,7 @@ public class Zombie : MonoBehaviour
         {
             sniffTimer = 2.5f;
             if (MayoTrail.Instance != null &&
-                MayoTrail.Instance.FreshestNear(transform.position, 14f, out var scent))
+                MayoTrail.Instance.FreshestNear(transform.position, 10f, out var scent))
             {
                 wanderTarget = scent;
                 repickTarget = 8f; // не перебивать нюх сразу случайной точкой
@@ -141,7 +177,13 @@ public class Zombie : MonoBehaviour
     {
         hp -= dmg;
         GameEvents.RaiseNotify($"Зомби получает {dmg:F0} урона");
-        if (player != null && state < State.Chase) state = State.Chase; // агримся даже днём
+        if (player != null && state < State.Chase)
+        {
+            // удар «в морду» — видим жертву, даже если стена
+            state = State.Chase;
+            lastKnown = player.transform.position;
+            searchTimer = SearchTime;
+        }
         if (hp <= 0f)
         {
             if (dropItem != null && pickupPrefab != null)

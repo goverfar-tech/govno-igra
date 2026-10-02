@@ -18,15 +18,15 @@ public class MayoTrail : MonoBehaviour
     }
 
     [Header("След")]
-    public float lifeSec = 45f;        // сколько пахнет
-    public float stepDistance = 0.6f;  // капать не чаще, чем раз в столько метров
+    public float lifeSec = 20f;        // сколько пахнет (автор: 45 — долго)
+    public float stepDistance = 1.1f;  // капать не чаще; пятна идут РЕДКО, не сплошной полосой
     public float sprintStrength = 1.8f;
     public float crouchStrength = 0.5f;
     [Tooltip("защита от разрастания списка")]
     public int maxPoints = 500;
 
     [Header("Визуал пятен (временный, до арт-прогона)")]
-    public float spotBaseSize = 0.35f;  // радиус пятна при силе 1
+    public float spotBaseSize = 0.28f;  // радиус пятна при силе 1
     public Color spotColor = new Color(0.93f, 0.88f, 0.62f, 1f);
 
     readonly List<TrailPoint> points = new List<TrailPoint>();

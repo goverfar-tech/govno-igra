@@ -14,8 +14,9 @@ using UnityEngine.UI;
 // Источники данных: Player/Inventory/Stats находятся сами по сцене,
 // обновления — по событиям GameEvents (§4 архитектуры).
 //
-// Состояния: игра | инвентарь (Tab) | пауза (Esc) | смерть |
+// Состояния: игра | инвентарь (Tab) | крафт (C) | пауза (Esc) | смерть |
 // стартовое меню | настройки (поверх меню/паузы).
+// Escape-цепочка: настройки → крафт → инвентарь → пауза.
 // Любое открытое UI-состояние агрегируется в uiActive и вещается
 // наружу как InventoryOpenChanged — Player на него уже реагирует
 // (блок ввода + освобождение курсора); курсор для верности дублируем тут.
@@ -36,12 +37,14 @@ public class Hud : MonoBehaviour
     Text promptText;
     ToastFeed toasts;
     InventoryPanelView inventoryPanel;
+    CraftPanel craftPanel;
     DeathScreen deathScreen;
     PauseMenu pauseMenu;
     MainMenu mainMenu;
     SettingsPanel settingsPanel;
 
     bool inventoryOpen;
+    bool craftOpen;     // окно крафта (C)
     bool paused;
     bool dead;
     bool menuOpen;      // стартовое меню
@@ -117,11 +120,14 @@ public class Hud : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (settingsOpen) CloseSettings();
+            else if (craftOpen) SetCraftOpen(false);
             else if (inventoryOpen) SetInventoryOpen(false);
             else SetPaused(!paused);
         }
         if (Input.GetKeyDown(KeyCode.Tab) && !paused && !settingsOpen)
             SetInventoryOpen(!inventoryOpen);
+        if (Input.GetKeyDown(KeyCode.C) && !paused && !settingsOpen)
+            SetCraftOpen(!craftOpen);
     }
 
     // ---------- построение ----------
@@ -150,6 +156,7 @@ public class Hud : MonoBehaviour
         BuildPrompt(crt);
         hotbar = HotbarView.Create(crt);
         inventoryPanel = InventoryPanelView.Create(crt, inventory);
+        craftPanel = CraftPanel.Create(crt, inventory);
         deathScreen = DeathScreen.Create(crt);
         deathScreen.RestartRequested = Restart;
         pauseMenu = PauseMenu.Create(crt);
@@ -252,6 +259,7 @@ public class Hud : MonoBehaviour
     {
         hotbar.Refresh(inventory);
         inventoryPanel.Refresh(inventory);
+        craftPanel.Refresh(inventory);
     }
 
     void RefreshSelection()
@@ -272,6 +280,7 @@ public class Hud : MonoBehaviour
     {
         dead = true;
         SetInventoryOpen(false);
+        SetCraftOpen(false);
         deathScreen.Show();
         SyncUiActive();
     }
@@ -282,6 +291,14 @@ public class Hud : MonoBehaviour
     {
         inventoryOpen = open;
         inventoryPanel.gameObject.SetActive(open);
+        if (!open) TooltipService.Hide();
+        SyncUiActive();
+    }
+
+    void SetCraftOpen(bool open)
+    {
+        craftOpen = open;
+        craftPanel.gameObject.SetActive(open);
         if (!open) TooltipService.Hide();
         SyncUiActive();
     }
@@ -347,7 +364,7 @@ public class Hud : MonoBehaviour
     // чтобы не зависеть от порядка подписки при старте сцены).
     void SyncUiActive()
     {
-        bool active = inventoryOpen || paused || dead || menuOpen || settingsOpen;
+        bool active = inventoryOpen || craftOpen || paused || dead || menuOpen || settingsOpen;
         if (active == uiActive) return;
         uiActive = active;
         GameEvents.RaiseInventoryOpenChanged(active);

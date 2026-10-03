@@ -205,8 +205,9 @@ public class Player : MonoBehaviour
 
     // Возрождение по §9.5 (corpse run): весь инвентарь вываливается
     // дропом на месте смерти, игрок просыпается у последнего костра
-    // (или на старте) с половиной ведра. Мир не пересоздаётся.
-    // Ночную стаю снимаем — иначе заруинят прямо на точке респауна.
+    // (или на старте) с половиной ведра. Мир не пересоздаётся и стая
+    // НЕ снимается: зомби дойдут до места гибели (там же лежит дроп)
+    // и разбредутся — ночь продолжается как ни в чём не бывало.
     public void Respawn()
     {
         var inv = Inventory;
@@ -226,9 +227,6 @@ public class Player : MonoBehaviour
         }
         GameEvents.RaiseInventoryChanged();
         inv.Select(0);
-
-        foreach (var z in FindObjectsByType<Zombie>(FindObjectsSortMode.None))
-            Destroy(z.gameObject);
 
         Teleport(hasCampfireSpawn ? lastCampfirePos + Vector3.up * 0.6f : spawnPos);
         Stats.SetState(Stats.maxMayo * 0.5f, 0f); // полведра; сбросит IsDead,

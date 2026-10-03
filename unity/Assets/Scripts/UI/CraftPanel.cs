@@ -7,6 +7,9 @@ using UnityEngine.UI;
 // результата (icon биндится ItemIconBinder'ом), название, стоимость
 // «Древесина 2/3» по ингредиентам (красным, если не хватает),
 // кнопка «Создать» активна ровно при CanCraft.
+// Список — прокручиваемый (ScrollRect + маскированный Viewport):
+// при 10+ рецептах низ панели не уезжает за экран, высота панели
+// ограничена ~70% референсной высоты канваса.
 // Обновляется по InventoryChanged (подписка — в Hud, вызов Refresh).
 // Само окно открывает/закрывает Hud (C / Escape); пока открыто —
 // uiActive в Hud поднимает InventoryOpenChanged и ввод игрока блокируется.
@@ -15,6 +18,11 @@ public class CraftPanel : MonoBehaviour
     const float RowHeight = 62f;
     const float RowGap = 8f;
     const float Pad = 14f;
+    const float PanelWidth = 520f;
+    const float TopPad = 44f;    // место под заголовок
+    const float BottomPad = 38f; // место под подсказку
+    // потолок высоты — ~70% референсной высоты HudCanvas (1080)
+    const float MaxHeight = 760f;
 
     class Row
     {
@@ -37,59 +45,105 @@ public class CraftPanel : MonoBehaviour
         System.Array.Sort(recipes, (a, b) => string.CompareOrdinal(
             a.result != null ? a.result.id : "", b.result != null ? b.result.id : ""));
 
+        // высота списка — по содержимому, но панель не выше MaxHeight
+        float listFull = recipes.Length * (RowHeight + RowGap);
+        float scrollH = Mathf.Clamp(listFull, 30f, MaxHeight - TopPad - BottomPad);
+        float height = Mathf.Max(TopPad + scrollH + BottomPad, 150f);
+
         var rt = (RectTransform)back.transform;
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
-        float width = 520f;
-        float height = 42f + recipes.Length * (RowHeight + RowGap) + 34f + Pad;
-        rt.sizeDelta = new Vector2(width, Mathf.Max(height, 150f));
+        rt.sizeDelta = new Vector2(PanelWidth, height);
 
         var title = UiWidgets.Text(back.transform, "Title", 18);
         var tr = (RectTransform)title.transform;
         tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 1f);
         tr.pivot = new Vector2(0.5f, 1f);
         tr.anchoredPosition = new Vector2(0f, -10f);
-        tr.sizeDelta = new Vector2(width, 24f);
+        tr.sizeDelta = new Vector2(PanelWidth, 24f);
         title.text = "КРАФТ";
+
+        // ---- прокрутка: ScrollRect → Viewport(RectMask2D) → Content(VLG+fitter) ----
+        var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect));
+        scrollGo.transform.SetParent(back.transform, false);
+        // невидимый ловец лучей: ScrollRect не Graphic, без этого Image
+        // колесо/драг срабатывали бы только над строками, а не в зазорах
+        var scrollCatch = scrollGo.AddComponent<Image>();
+        scrollCatch.color = new Color(0f, 0f, 0f, 0f);
+        var srt = (RectTransform)scrollGo.transform;
+        srt.anchorMin = srt.anchorMax = new Vector2(0.5f, 1f);
+        srt.pivot = new Vector2(0.5f, 1f);
+        srt.anchoredPosition = new Vector2(0f, -TopPad + 6f);
+        srt.sizeDelta = new Vector2(PanelWidth, scrollH);
+
+        var viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+        viewportGo.transform.SetParent(srt, false);
+        var vpt = (RectTransform)viewportGo.transform;
+        UiWidgets.Stretch(vpt, 0f);
+
+        var contentGo = new GameObject("Content", typeof(RectTransform));
+        contentGo.transform.SetParent(vpt, false);
+        var crt = (RectTransform)contentGo.transform;
+        crt.anchorMin = new Vector2(0f, 1f);
+        crt.anchorMax = new Vector2(1f, 1f);
+        crt.pivot = new Vector2(0.5f, 1f);
+        crt.anchoredPosition = Vector2.zero;
+        crt.sizeDelta = Vector2.zero;
+
+        var vlg = contentGo.AddComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset((int)Pad, (int)Pad, 0, 0);
+        vlg.spacing = RowGap;
+        vlg.childAlignment = TextAnchor.UpperCenter;
+        vlg.childControlWidth = true;
+        vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true;
+        vlg.childForceExpandHeight = false;
+        var fitter = contentGo.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        var scroll = scrollGo.GetComponent<ScrollRect>();
+        scroll.viewport = vpt;
+        scroll.content = crt;
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped; // без резиновых краёв
+        scroll.scrollSensitivity = RowHeight * 0.5f;
 
         if (recipes.Length == 0)
         {
             var empty = UiWidgets.Text(back.transform, "Empty", 14);
             var er = (RectTransform)empty.transform;
             er.anchorMin = er.anchorMax = new Vector2(0.5f, 0.5f);
-            er.sizeDelta = new Vector2(width, 30f);
+            er.sizeDelta = new Vector2(PanelWidth, 30f);
             empty.text = "Нет рецептов (Survival → Bake Recipes)";
             empty.color = new Color(1f, 1f, 1f, 0.5f);
         }
 
-        float y = -44f;
         foreach (var recipe in recipes)
-        {
-            view.BuildRow(back.transform, recipe, y, width);
-            y -= RowHeight + RowGap;
-        }
+            view.BuildRow(crt, recipe);
 
         var hint = UiWidgets.Text(back.transform, "Hint", 12);
         var hr = (RectTransform)hint.transform;
         hr.anchorMin = hr.anchorMax = new Vector2(0.5f, 0f);
         hr.pivot = new Vector2(0.5f, 0f);
         hr.anchoredPosition = new Vector2(0f, 8f);
-        hr.sizeDelta = new Vector2(width, 22f);
-        hint.text = "C / Esc — закрыть";
+        hr.sizeDelta = new Vector2(PanelWidth, 22f);
+        hint.text = "C / Esc — закрыть  •  колесо — листать";
         hint.color = new Color(1f, 1f, 1f, 0.45f);
 
         back.gameObject.SetActive(false);
         return view;
     }
 
-    void BuildRow(Transform parent, RecipeData recipe, float top, float panelWidth)
+    // Строка рецепта внутри ScrollRect-контента: ширину и позицию задаёт
+    // VerticalLayoutGroup, высоту фиксируем через LayoutElement.
+    void BuildRow(Transform parent, RecipeData recipe)
     {
         var back = UiWidgets.Panel(parent, "Recipe_" + recipe.name, UiWidgets.SlotColor);
+        var le = back.gameObject.AddComponent<LayoutElement>();
+        le.preferredHeight = RowHeight;
         var rt = (RectTransform)back.transform;
-        rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
-        rt.pivot = new Vector2(0f, 1f);
-        rt.anchoredPosition = new Vector2(Pad, top);
-        rt.sizeDelta = new Vector2(panelWidth - 2 * Pad, RowHeight);
+        rt.sizeDelta = new Vector2(PanelWidth - 2 * Pad, RowHeight);
 
         // иконка результата (icon приходит из ItemIconBinder); нет иконки —
         // остаётся тёмная ячейка-подложка
@@ -147,7 +201,9 @@ public class CraftPanel : MonoBehaviour
         foreach (var row in rows)
         {
             row.cost.text = CostString(row.recipe, inventory);
-            row.craft.interactable = row.recipe.CanCraft(inventory);
+            // без инвентаря (нет игрока в сцене) кнопка мертва — иначе
+            // клик давал бы ложный тост «Не хватает материалов»
+            row.craft.interactable = inventory != null && row.recipe.CanCraft(inventory);
         }
     }
 

@@ -39,10 +39,13 @@ public static class GameSettings
         Volume = PlayerPrefs.GetFloat(KeyVolume, 1f);
     }
 
+    // Сеттеры пишут на диск сразу (PlayerPrefs.Save): краш/вылет между
+    // движением слайдера и закрытием панели не должен терять настройку.
     public static void SetFov(float v)
     {
         Fov = Mathf.Clamp(v, 60f, 100f);
         PlayerPrefs.SetFloat(KeyFov, Fov);
+        PlayerPrefs.Save();
         ApplyFov(Fov);
     }
 
@@ -50,6 +53,7 @@ public static class GameSettings
     {
         Sensitivity = Mathf.Clamp(v, 0.5f, 6f);
         PlayerPrefs.SetFloat(KeySens, Sensitivity);
+        PlayerPrefs.Save();
         ApplySens(Sensitivity);
     }
 
@@ -57,10 +61,11 @@ public static class GameSettings
     {
         Volume = Mathf.Clamp01(v);
         PlayerPrefs.SetFloat(KeyVolume, Volume);
+        PlayerPrefs.Save();
         ApplyVolume(Volume);
     }
 
-    // Пишем на диск при закрытии панели, а не на каждый тик слайдера.
+    // На закрытии панели — страховочный сброс (пишет повторно, без вреда).
     public static void Flush() => PlayerPrefs.Save();
 
     static void ApplyFov(float v)

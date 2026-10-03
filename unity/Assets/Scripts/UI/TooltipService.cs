@@ -31,11 +31,20 @@ public static class TooltipService
         if (string.IsNullOrEmpty(text)) return;
         label.text = text;
         panelRt.gameObject.SetActive(true);
-        // верхняя грань слота в экранных пикселях (ovеrlay: world == screen)
+        // верхняя грань слота в экранных пикселях (overlay: world == screen)
         var corners = new Vector3[4];
         anchor.GetWorldCorners(corners);
         var topMid = (corners[1] + corners[2]) * 0.5f;
-        panelRt.position = topMid + Vector3.up * 6f;
+        var pos = topMid + Vector3.up * 6f;
+        // кламп в границы экрана: pivot тултипа (0.5, 0) — опорная точка
+        // это середина нижней грани; мировые размеры — rect × масштаб канваса
+        float sx = panelRt.lossyScale.x;
+        float sy = panelRt.lossyScale.y;
+        float halfW = panelRt.rect.width * 0.5f * sx;
+        float h = panelRt.rect.height * sy;
+        pos.x = Mathf.Clamp(pos.x, halfW, Mathf.Max(halfW, Screen.width - halfW));
+        pos.y = Mathf.Clamp(pos.y, 0f, Mathf.Max(0f, Screen.height - h));
+        panelRt.position = pos;
         panelRt.SetAsLastSibling();
     }
 

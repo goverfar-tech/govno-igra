@@ -88,6 +88,16 @@ public class InventoryPanelView : MonoBehaviour
             slots[i].Refresh(inventory.slots[i], i == inventory.selected);
     }
 
+    // Панель выключили посреди драга (Tab/Esc): OnEndDrag на неактивный
+    // объект не приходит — завершаем принудительно: вернуть raycasts
+    // исходному слоту и уничтожить призрак, иначе слот останется «слепым»,
+    // а призрак повиснет на экране.
+    void OnDisable()
+    {
+        SlotDragEnd();
+        TooltipService.Hide();
+    }
+
     // ---- драг-н-дроп ----
 
     internal void SlotDragBegin(int index, InventorySlotView source)
@@ -97,8 +107,10 @@ public class InventoryPanelView : MonoBehaviour
         dragSource = source;
         source.SetRaycasts(false);
 
-        // призрак за курсором: полупрозрачный квадрат с именем предмета
-        var ghost = UiWidgets.Panel(transform.parent, "DragGhost",
+        // призрак за курсором: полупрозрачный квадрат с именем предмета.
+        // Родитель — сама панель (а не канвас): SetActive(false) панели
+        // гасит призрак, даже если OnEndDrag не придёт (закрытие в драге).
+        var ghost = UiWidgets.Panel(transform, "DragGhost",
             new Color(0.12f, 0.13f, 0.14f, 0.75f));
         dragGhost = (RectTransform)ghost.transform;
         dragGhost.sizeDelta = new Vector2(Cell - 8f, Cell - 8f);

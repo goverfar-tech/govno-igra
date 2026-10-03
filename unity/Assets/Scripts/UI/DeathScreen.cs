@@ -53,6 +53,8 @@ public class DeathScreen : MonoBehaviour
     }
 
     public void Show() => gameObject.SetActive(true);
+    // Загрузка сейва оживляет игрока без смены сцены — вуаль надо уметь гасить.
+    public void Hide() => gameObject.SetActive(false);
 
     void OnRestartClicked() => RestartRequested?.Invoke();
 }

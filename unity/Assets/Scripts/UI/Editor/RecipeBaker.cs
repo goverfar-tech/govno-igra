@@ -27,15 +27,16 @@ public static class RecipeBaker
         EnsureFolder(RecipesFolder);
         var missing = new System.Text.StringBuilder();
         int n = 0;
-        // базовый набор M2: инструменты и постройки из дерева/камня
-        n += Sync(items, missing, "axe", 1, ("wood", 2), ("stone", 1));
-        n += Sync(items, missing, "pickaxe", 1, ("wood", 2), ("stone", 2));
+        // набор из M2 по мете §9.3: инструменты (топор/кирка) ВЫРЕЗАНЫ —
+        // осталось копьё; постройки из дерева/камня. Если в Resources/Recipes
+        // остались старые axe.asset/pickaxe.asset — файлы не трогаем,
+        // судьбу ассетов решает автор, мы просто больше их не генерим.
         n += Sync(items, missing, "spear", 1, ("wood", 3));
         n += Sync(items, missing, "wall", 1, ("wood", 4));
         n += Sync(items, missing, "campfire", 1, ("wood", 5), ("stone", 3));
         AssetDatabase.SaveAssets();
 
-        Debug.Log($"[Survival] Рецепты запечены: {n}/{5}" +
+        Debug.Log($"[Survival] Рецепты запечены: {n}/{3}" +
                   (missing.Length > 0 ? $"\nНе найдены предметы:\n{missing}" : ""));
         EditorUtility.DisplayDialog("Survival",
             $"Рецептов запечено: {n}." +
@@ -53,18 +54,18 @@ public static class RecipeBaker
             return 0;
         }
         var ings = new List<RecipeData.Ingredient>();
-        bool ok = true;
         foreach (var (id, count) in inputs)
         {
             if (!items.TryGetValue(id, out var it))
             {
+                // пропускаем ТОЛЬКО этот вход — иначе существующий
+                // рецепт навсегда оставался бы устаревшим
                 missing.AppendLine($"— вход «{id}» для {resultId}");
-                ok = false;
+                Debug.LogWarning($"[Survival] Рецепт «{resultId}»: предмет-вход «{id}» не найден, вход пропущен.");
                 continue;
             }
             ings.Add(new RecipeData.Ingredient { item = it, count = count });
         }
-        if (!ok) return 0;
 
         string path = $"{RecipesFolder}/{resultId}.asset";
         var recipe = AssetDatabase.LoadAssetAtPath<RecipeData>(path);

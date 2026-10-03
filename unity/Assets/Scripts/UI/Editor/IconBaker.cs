@@ -54,7 +54,15 @@ public static class IconBaker
             // сцену не трогаем: съёмочная площадка далеко за пределами мира
             root.transform.position = new Vector3(10000f, 10000f, 10000f);
 
-            var inst = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            // InstantiatePrefab возвращает null, если модель не prefab-корень
+            // (например, вложенный GameObject из GLB) — тогда обычная копия
+            var inst = PrefabUtility.InstantiatePrefab(model) as GameObject;
+            if (inst == null)
+            {
+                Debug.LogWarning($"[Survival] «{model.name}» не prefab-корень — копирую как обычный объект.");
+                inst = Object.Instantiate(model);
+            }
+            if (inst == null) { Debug.LogWarning($"[Survival] Не удалось создать экземпляр «{model.name}»."); return false; }
             inst.transform.SetParent(root.transform, false);
 
             var renderers = inst.GetComponentsInChildren<Renderer>();
@@ -93,7 +101,10 @@ public static class IconBaker
             tex.Apply();
             RenderTexture.active = null;
 
-            File.WriteAllBytes($"{IconsFolder}/{id}.png", tex.EncodeToPNG());
+            // File.WriteAllBytes чувствителен к cwd процесса — собираем
+            // абсолютный путь от Application.dataPath (…/Assets)
+            string absPng = Application.dataPath + $"/Resources/Icons/{id}.png";
+            File.WriteAllBytes(absPng, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
         }
         finally
@@ -104,7 +115,19 @@ public static class IconBaker
 
         string spritePath = $"{IconsFolder}/{id}.png";
         AssetDatabase.ImportAsset(spritePath, ImportAssetOptions.ForceSynchronousImport);
-        var ti = (TextureImporter)AssetImporter.GetAtPath(spritePath);
+        var ti = AssetImporter.GetAtPath(spritePath) as TextureImporter;
+        if (ti == null)
+        {
+            // сразу после записи файла импортёр может ещё не отдать ассет —
+            // принудительный Refresh и вторая попытка
+            AssetDatabase.Refresh();
+            ti = AssetImporter.GetAtPath(spritePath) as TextureImporter;
+        }
+        if (ti == null)
+        {
+            Debug.LogWarning($"[Survival] Не получен TextureImporter для {spritePath} — PNG записан, спрайт настрой вручную.");
+            return true; // картинка запечена, падаем только по настройке спрайта
+        }
         ti.textureType = TextureImporterType.Sprite;
         ti.spriteImportMode = SpriteImportMode.Single;
         ti.alphaIsTransparency = true;

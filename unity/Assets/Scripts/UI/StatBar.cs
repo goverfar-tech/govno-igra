@@ -46,4 +46,13 @@ public class StatBar : MonoBehaviour
         fill.fillAmount = max > 0f ? Mathf.Clamp01(value / max) : 0f;
         label.text = $"{statName} {value:F0}/{max:F0}";
     }
+
+    // Вариант с произвольным текстом: «Майонез 78/100» не всегда осмысленно
+    // (небесные часы показывают «Небо день 37%» вместо 0/1).
+    public void Set(float value, float max, string text)
+    {
+        if (fill == null) return;
+        fill.fillAmount = max > 0f ? Mathf.Clamp01(value / max) : 0f;
+        label.text = text;
+    }
 }

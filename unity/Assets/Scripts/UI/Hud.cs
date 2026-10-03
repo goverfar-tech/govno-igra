@@ -21,12 +21,22 @@ using UnityEngine.UI;
 // наружу как InventoryOpenChanged — Player на него уже реагирует
 // (блок ввода + освобождение курсора); курсор для верности дублируем тут.
 // timeScale = 0 ровно когда открыто меню или пауза (SyncTimeScale).
+//
+// Hud переживает смену сцены (синглтон + DontDestroyOnLoad): рестарт
+// после смерти грузит Main заново, а HudBootstrap срабатывает только
+// раз за сессию — без этого весь UI исчезал бы навсегда. Весь UI лежит
+// дочерним к нашему GameObject (HudCanvas), поэтому переезжает вместе
+// с ним. Сценные ссылки (Player/Stats/Inventory, DebugHud, EventSystem)
+// перепривязываются в SceneManager.sceneLoaded — см. OnSceneLoaded.
 public class Hud : MonoBehaviour
 {
     // Рестарт (экран смерти/пауза) пережидает смену сцены статикой —
     // после «Начать заново» стартовое меню не показываем.
     static bool skipMenuOnce;
     public static void SkipMenuOnNextLoad() => skipMenuOnce = true;
+
+    // Единственный живой Hud; копии из перезагруженной сцены самоубиваются.
+    static Hud instance;
 
     Stats stats;
     Inventory inventory;
@@ -35,6 +45,7 @@ public class Hud : MonoBehaviour
     // Полоски: майонез (HP+еда), яд, небесные часы (§9.2)
     StatBar mayoBar, poisonBar, timeBar;
     float timeOfDay;
+    bool isNight;
     HotbarView hotbar;
     Text promptText;
     ToastFeed toasts;
@@ -54,18 +65,30 @@ public class Hud : MonoBehaviour
     bool settingsFromMenu;
     bool uiActive;
 
+    // Кэш последних отрисованных значений: RefreshStats прилетает по два
+    // события за кадр (StatsChanged + TimeOfDayChanged) — перерисовываем
+    // тексты только когда хоть одно значение реально сменилось.
+    float lastMayo = -1f, lastPoison = -1f, lastTime = -1f;
+    bool lastNight;
+
     void Awake()
     {
+        // синглтон-гвард: копия из перезагруженной сцены не нужна —
+        // наш UI уже живёт поверх и перепривяжется в OnSceneLoaded
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        instance = this;
+        DontDestroyOnLoad(gameObject);
+        SceneManager.sceneLoaded += OnSceneLoaded;
+
         // временный IMGUI-HUD больше не нужен (файл не трогаем — лишь гасим объект)
         var dbg = FindAnyObjectByType<DebugHud>(FindObjectsInactive.Include);
         if (dbg != null) dbg.gameObject.SetActive(false);
 
-        var player = FindAnyObjectByType<Player>();
-        if (player != null)
-        {
-            stats = player.GetComponent<Stats>();
-            inventory = player.GetComponent<Inventory>();
-        }
+        BindScene();
 
         GameSettings.ApplyAll(); // FOV/чувствительность/громкость из PlayerPrefs
 
@@ -82,9 +105,63 @@ public class Hud : MonoBehaviour
         RefreshAll();
     }
 
+    void OnDestroy()
+    {
+        if (instance == this)
+        {
+            instance = null;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+    }
+
+    // Player/Stats/Inventory — сценные объекты, на рестарте пересоздаются.
+    // Вызывается из Awake и на каждой загрузке новой сцены.
+    void BindScene()
+    {
+        var player = FindAnyObjectByType<Player>();
+        stats = player != null ? player.GetComponent<Stats>() : null;
+        inventory = player != null ? player.GetComponent<Inventory>() : null;
+    }
+
+    // Перезагрузка сцены (рестарт после смерти/из паузы): мы пережили —
+    // перепривязать всё сценное и сбросить UI в «чистую игру».
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (this != instance) return; // подстраховка: дубликат молчит
+
+        EnsureEventSystem(); // EventSystem жил в старой сцене и разрушен
+
+        // DebugHud свежей сцены снова активен — гасим повторно
+        var dbg = FindAnyObjectByType<DebugHud>(FindObjectsInactive.Include);
+        if (dbg != null) dbg.gameObject.SetActive(false);
+
+        BindScene();
+        GameSettings.ApplyAll(); // FOV/чувствительность — новой камере/игроку
+
+        // сброс всех состояний: ни меню, ни паузы, ни панелей, ни смерти
+        skipMenuOnce = false;
+        menuOpen = false;
+        settingsOpen = false;
+        settingsPanel.Hide();
+        mainMenu.gameObject.SetActive(false);
+        inventoryOpen = false;
+        inventoryPanel.gameObject.SetActive(false); // OnDisable панели довернёт драг
+        craftOpen = false;
+        craftPanel.gameObject.SetActive(false);
+        paused = false;
+        pauseMenu.Hide();
+        dead = false;
+        deathScreen.Hide();
+        TooltipService.Hide();
+
+        SyncUiActive();
+        SyncTimeScale();
+        RefreshAll();
+    }
+
     void OnEnable()
     {
-        GameEvents.StatsChanged += RefreshStats;
+        GameEvents.StatsChanged += OnStatsChanged;
         GameEvents.InventoryChanged += RefreshInventory;
         GameEvents.SelectionChanged += RefreshSelection;
         GameEvents.PromptChanged += OnPrompt;
@@ -93,11 +170,16 @@ public class Hud : MonoBehaviour
         GameEvents.TimeOfDayChanged += OnTime;
     }
 
-    void OnTime(float t, bool night) { timeOfDay = t; RefreshStats(); }
+    void OnTime(float t, bool night)
+    {
+        timeOfDay = t;
+        isNight = night;
+        RefreshStats();
+    }
 
     void OnDisable()
     {
-        GameEvents.StatsChanged -= RefreshStats;
+        GameEvents.StatsChanged -= OnStatsChanged;
         GameEvents.InventoryChanged -= RefreshInventory;
         GameEvents.SelectionChanged -= RefreshSelection;
         GameEvents.PromptChanged -= OnPrompt;
@@ -122,14 +204,22 @@ public class Hud : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.R)) Restart();
             return;
         }
-        if (menuOpen) return; // в меню выбор только кнопками
+
+        // Esc обрабатываем ДО return по menuOpen: иначе из стартового меню
+        // нельзя закрыть настройки по Esc (окно поверх меню).
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (settingsOpen) CloseSettings();
-            else if (craftOpen) SetCraftOpen(false);
-            else if (inventoryOpen) SetInventoryOpen(false);
-            else SetPaused(!paused);
+            else if (!menuOpen)
+            {
+                if (craftOpen) SetCraftOpen(false);
+                else if (inventoryOpen) SetInventoryOpen(false);
+                else SetPaused(!paused);
+            }
+            // в самом главном меню Esc ничего не делает: выбор кнопками
         }
+
+        if (menuOpen) return; // в меню остальной выбор только кнопками
         if (Input.GetKeyDown(KeyCode.Tab) && !paused && !settingsOpen)
             SetInventoryOpen(!inventoryOpen);
         if (Input.GetKeyDown(KeyCode.C) && !paused && !settingsOpen)
@@ -148,7 +238,7 @@ public class Hud : MonoBehaviour
     {
         var canvasGo = new GameObject("HudCanvas",
             typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        canvasGo.transform.SetParent(transform, false);
+        canvasGo.transform.SetParent(transform, false); // под нами — переживёт сцену
         canvas = canvasGo.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         var scaler = canvasGo.GetComponent<CanvasScaler>();
@@ -256,8 +346,19 @@ public class Hud : MonoBehaviour
     void RefreshStats()
     {
         if (stats == null) return;
+
+        // Дедупе: StatsChanged и TimeOfDayChanged прилетают парой за кадр —
+        // нечего дёргать uGUI-тексты, пока ни одно значение не изменилось.
+        if (Mathf.Approximately(stats.Mayo, lastMayo)
+            && Mathf.Approximately(stats.Poison, lastPoison)
+            && Mathf.Approximately(timeOfDay, lastTime)
+            && isNight == lastNight) return;
+        lastMayo = stats.Mayo;
+        lastPoison = stats.Poison;
+        lastTime = timeOfDay;
+        lastNight = isNight;
+
         // §9.2: ведро = здоровье+сытость слились в «Майонез». Яд — статус.
-        // Третья полоска: небесные часы (сколько суток прошло, полная=ночь).
         mayoBar.Set(stats.Mayo, stats.maxMayo);
         // пустеющее ведро мигает красным — смерть должна читаться заранее
         bool low = stats.Mayo / stats.maxMayo < 0.25f;
@@ -266,7 +367,10 @@ public class Hud : MonoBehaviour
                          (Mathf.Sin(Time.unscaledTime * 6f) + 1f) * 0.5f)
             : UiWidgets.FoodColor);
         poisonBar.Set(stats.Poison, stats.maxPoison);
-        timeBar.Set(timeOfDay, 1f);
+        // небесные часы — фазой суток и процентом, а не голым 0/1
+        int pct = Mathf.RoundToInt(Mathf.Clamp01(timeOfDay) * 100f);
+        string phase = isNight ? "ночь" : "день";
+        timeBar.Set(timeOfDay, 1f, $"Небо {phase} {pct}%");
     }
 
     void RefreshInventory()
@@ -290,6 +394,21 @@ public class Hud : MonoBehaviour
 
     void OnNotify(string text) => toasts.Push(text);
 
+    // StatsChanged — ещё и канал «оживления»: F9/«Продолжить» гоняют
+    // Stats.SetState, который снимает IsDead. Гасим экран смерти тут,
+    // иначе после загрузки сейва он висел бы до рестарта.
+    void OnStatsChanged()
+    {
+        if (dead && stats != null && !stats.IsDead)
+        {
+            dead = false;
+            deathScreen.Hide();
+            SyncUiActive();
+            SyncTimeScale();
+        }
+        RefreshStats();
+    }
+
     void OnPlayerDied()
     {
         dead = true;
@@ -303,16 +422,28 @@ public class Hud : MonoBehaviour
 
     void SetInventoryOpen(bool open)
     {
+        if (open && inventory == null) return; // нет игрока — показывать нечего
         inventoryOpen = open;
         inventoryPanel.gameObject.SetActive(open);
+        if (open && craftOpen) // панели взаимоисключают друг друга
+        {
+            craftOpen = false;
+            craftPanel.gameObject.SetActive(false);
+        }
         if (!open) TooltipService.Hide();
         SyncUiActive();
     }
 
     void SetCraftOpen(bool open)
     {
+        if (open && inventory == null) return;
         craftOpen = open;
         craftPanel.gameObject.SetActive(open);
+        if (open && inventoryOpen)
+        {
+            inventoryOpen = false;
+            inventoryPanel.gameObject.SetActive(false);
+        }
         if (!open) TooltipService.Hide();
         SyncUiActive();
     }
@@ -369,6 +500,9 @@ public class Hud : MonoBehaviour
     void Restart()
     {
         SkipMenuOnNextLoad();
+        // Снимаем паузу ДО загрузки: переживающие сцену слушатели
+        // (AudioManager) иначе навсегда останутся в паузном состоянии.
+        if (paused) { paused = false; GameEvents.RaisePauseChanged(false); }
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }

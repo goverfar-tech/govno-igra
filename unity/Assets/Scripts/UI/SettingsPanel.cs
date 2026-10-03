@@ -5,13 +5,16 @@ using UnityEngine.UI;
 // Панель настроек (Поток B): FOV камеры, чувствительность мыши,
 // громкость. Модальная: открывается поверх главного меню или паузы,
 // куда открыли — туда и возвращаемся по «Назад»/Esc (логика в Hud).
-// Значения — GameSettings: применяются живьём, пишутся в PlayerPrefs,
-// сброс на диск (PlayerPrefs.Save) при закрытии панели.
+// Значения — GameSettings: применяются живьём и сразу пишутся на диск
+// (PlayerPrefs.Save в сеттерах GameSettings).
 public class SettingsPanel : MonoBehaviour
 {
     public Action BackRequested;
 
     Text fovValue, sensValue, volumeValue;
+    // слайдеры держим ссылками: при открытии подтягиваем бегунки
+    // к текущим GameSettings (SetValueWithoutNotify — без побочных Set*)
+    Slider fovSlider, sensSlider, volumeSlider;
 
     public static SettingsPanel Create(Transform parent)
     {
@@ -30,12 +33,15 @@ public class SettingsPanel : MonoBehaviour
         tt.sizeDelta = new Vector2(400f, 34f);
         title.text = "НАСТРОЙКИ";
 
-        view.fovValue = view.BuildRow(back.transform, 70f, "Поле зрения",
-            60f, 100f, GameSettings.Fov, v => $"{v:F0}", GameSettings.SetFov);
-        view.sensValue = view.BuildRow(back.transform, 120f, "Чувствительность",
-            0.5f, 6f, GameSettings.Sensitivity, v => $"{v:0.0}", GameSettings.SetSensitivity);
-        view.volumeValue = view.BuildRow(back.transform, 170f, "Громкость",
-            0f, 1f, GameSettings.Volume, v => $"{v * 100f:F0}%", GameSettings.SetVolume);
+        BuildRow(back.transform, 70f, "Поле зрения",
+            60f, 100f, GameSettings.Fov, v => $"{v:F0}", GameSettings.SetFov,
+            out view.fovValue, out view.fovSlider);
+        BuildRow(back.transform, 120f, "Чувствительность",
+            0.5f, 6f, GameSettings.Sensitivity, v => $"{v:0.0}", GameSettings.SetSensitivity,
+            out view.sensValue, out view.sensSlider);
+        BuildRow(back.transform, 170f, "Громкость",
+            0f, 1f, GameSettings.Volume, v => $"{v * 100f:F0}%", GameSettings.SetVolume,
+            out view.volumeValue, out view.volumeSlider);
 
         var back_ = UiWidgets.Button(back.transform, "BackButton", "Назад", 18);
         var b = (RectTransform)back_.transform;
@@ -50,8 +56,9 @@ public class SettingsPanel : MonoBehaviour
     }
 
     // Строка настройки: подпись слева, слайдер, текущее значение справа.
-    Text BuildRow(Transform parent, float topOffset, string label,
-        float min, float max, float initial, Func<float, string> format, Action<float> setter)
+    static void BuildRow(Transform parent, float topOffset, string label,
+        float min, float max, float initial, Func<float, string> format, Action<float> setter,
+        out Text valueText, out Slider outSlider)
     {
         var row = new GameObject(label, typeof(RectTransform));
         var rr = (RectTransform)row.transform;
@@ -69,13 +76,14 @@ public class SettingsPanel : MonoBehaviour
         nt.sizeDelta = new Vector2(150f, 34f);
         nameText.text = label;
 
-        var valueText = UiWidgets.Text(rr, "Value", 15, TextAnchor.MiddleRight);
-        var vt = valueText.rectTransform;
+        // локальная переменная: out-параметр нельзя захватывать в лямбду
+        var valText = UiWidgets.Text(rr, "Value", 15, TextAnchor.MiddleRight);
+        var vt = valText.rectTransform;
         vt.anchorMin = vt.anchorMax = new Vector2(1f, 0.5f);
         vt.pivot = new Vector2(1f, 0.5f);
         vt.anchoredPosition = Vector2.zero;
         vt.sizeDelta = new Vector2(56f, 34f);
-        valueText.text = format(initial);
+        valText.text = format(initial);
 
         var slider = UiWidgets.MakeSlider(rr, "Slider", min, max, initial);
         var st = (RectTransform)slider.transform;
@@ -87,14 +95,19 @@ public class SettingsPanel : MonoBehaviour
         slider.onValueChanged.AddListener(v =>
         {
             setter(v);
-            valueText.text = format(v);
+            valText.text = format(v);
         });
-        return valueText;
+        valueText = valText;
+        outSlider = slider;
     }
 
-    // Панель могла пересоздаваться с изменёнными значениями — подтянуть.
+    // Подтянуть подписи и ПОЗИЦИИ бегунков к текущим GameSettings:
+    // значения могли смениться с прошлого открытия (или сетапом сцены).
     public void SyncLabels()
     {
+        if (fovSlider != null) fovSlider.SetValueWithoutNotify(GameSettings.Fov);
+        if (sensSlider != null) sensSlider.SetValueWithoutNotify(GameSettings.Sensitivity);
+        if (volumeSlider != null) volumeSlider.SetValueWithoutNotify(GameSettings.Volume);
         if (fovValue != null) fovValue.text = $"{GameSettings.Fov:F0}";
         if (sensValue != null) sensValue.text = $"{GameSettings.Sensitivity:0.0}";
         if (volumeValue != null) volumeValue.text = $"{GameSettings.Volume * 100f:F0}%";

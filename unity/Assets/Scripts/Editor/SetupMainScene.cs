@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -72,6 +73,50 @@ public static class SetupMainScene
         var dayNight = sun.gameObject.AddComponent<DayNight>();
         dayNight.sun = sun;
 
+        // --- небо: диски солнца/луны + слой облаков (S/красота 2026-10-03) ---
+        // текстуры генерим кодом и сохраняем ассетами; шейдер без тумана,
+        // чтобы диски не тонули, когда включим туман §9.6
+        EnsureFolder("Assets/Textures");
+        var skyShader = EnsureSkyShader();
+        var sunTex = EnsureTexture("Assets/Textures/SunDisc.png", SunDiscPixels);
+        var moonTex = EnsureTexture("Assets/Textures/MoonDisc.png", MoonDiscPixels);
+        var cloudTex = EnsureTexture("Assets/Textures/Clouds.png", CloudPixels, repeat: true);
+
+        var skyRig = new GameObject("SkyRig");
+
+        var sunQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        Object.DestroyImmediate(sunQuad.GetComponent<Collider>());
+        sunQuad.name = "SunDisc";
+        sunQuad.transform.SetParent(skyRig.transform, false);
+        sunQuad.transform.localScale = Vector3.one * 55f;
+        var sunMat = new Material(skyShader);
+        sunMat.mainTexture = sunTex;
+        sunQuad.GetComponent<MeshRenderer>().sharedMaterial = sunMat;
+
+        var moonQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        Object.DestroyImmediate(moonQuad.GetComponent<Collider>());
+        moonQuad.name = "MoonDisc";
+        moonQuad.transform.SetParent(skyRig.transform, false);
+        moonQuad.transform.localScale = Vector3.one * 38f;
+        var moonMat = new Material(skyShader);
+        moonMat.mainTexture = moonTex;
+        moonQuad.GetComponent<MeshRenderer>().sharedMaterial = moonMat;
+
+        var cloudGo = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        Object.DestroyImmediate(cloudGo.GetComponent<Collider>());
+        cloudGo.name = "CloudLayer";
+        cloudGo.transform.SetParent(skyRig.transform, false);
+        cloudGo.transform.localScale = new Vector3(70f, 1f, 70f); // Plane 10 -> 700 м
+        cloudGo.transform.position = new Vector3(0f, 78f, 0f);
+        var cloudMat = new Material(skyShader);
+        cloudMat.mainTexture = cloudTex;
+        cloudMat.mainTextureScale = new Vector2(7f, 7f);
+        cloudGo.GetComponent<MeshRenderer>().sharedMaterial = cloudMat;
+
+        dayNight.sunDisc = sunQuad.GetComponent<MeshRenderer>();
+        dayNight.moonDisc = moonQuad.GetComponent<MeshRenderer>();
+        dayNight.cloudLayer = cloudGo.GetComponent<MeshRenderer>();
+
         // --- игрок ---
         var playerGo = GameObject.CreatePrimitive(PrimitiveType.Capsule);
         playerGo.name = "Player";
@@ -117,6 +162,9 @@ public static class SetupMainScene
         var wood = SyncItem("wood", "Древесина", 30, worldModel: "resource-wood");
         var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
         var meat = SyncItem("meat", "Сырая плоть", 10, food: 12f, poison: 30f, worldModel: "meat");      // §9.3: мало + яд
+        // плоть зомби в этом мире майонезная — белая (решение автора 2026-10-03)
+        var meatMayo = MakeWhiteModel("meat", "meat-mayo");
+        if (meatMayo != null) meat.worldModel = meatMayo;
         SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f, worldModel: "meat-patty");         // готовка режет яд
         // Яйца больше НЕ еда (решение автора 2026-10-03): персонаж —
         // майонезное ведро, ест только майонез и его производные (котлеты).
@@ -602,6 +650,174 @@ public static class SetupMainScene
         recipe.inputs = ings.ToArray();
         if (created) AssetDatabase.CreateAsset(recipe, path);
         else EditorUtility.SetDirty(recipe);
+    }
+
+    // ---------- небо и майонез-модели (S/красота 2026-10-03) ----------
+
+    const string SkyShaderSource = @"
+Shader ""Sky/SkyUnlit"" {
+    Properties { _MainTex (""Tex"", 2D) = ""white"" {} _Color (""Tint"", Color) = (1,1,1,1) }
+    SubShader {
+        Tags { ""Queue""=""Transparent"" ""IgnoreProjector""=""True"" ""RenderType""=""Transparent"" ""ForceNoShadowCasting""=""True"" }
+        ZWrite Off Cull Off
+        Blend SrcAlpha OneMinusSrcAlpha
+        Pass {
+            CGPROGRAM
+            #pragma vertex vert_img
+            #pragma fragment frag
+            #include ""UnityCG.cginc""
+            sampler2D _MainTex;
+            fixed4 _Color;
+            fixed4 frag (v2f_img i) : SV_Target { return tex2D(_MainTex, i.uv) * _Color; }
+            ENDCG
+        }
+    }
+    Fallback Off
+}";
+
+    // Шейдер неба без тумана: компилируем из строки и сохраняем ассетом.
+    static Shader EnsureSkyShader()
+    {
+        const string path = "Assets/Shaders/SkyUnlit.shader";
+        var existing = AssetDatabase.LoadAssetAtPath<Shader>(path);
+        if (existing != null) return existing;
+        EnsureFolder("Assets/Shaders");
+        Shader shader;
+        try { shader = ShaderUtil.CreateShaderAsset(SkyShaderSource, false); }
+        catch (System.ArgumentException) { shader = ShaderUtil.CreateShaderAsset(SkyShaderSource); }
+        AssetDatabase.CreateAsset(shader, path);
+        return shader;
+    }
+
+    static Texture2D EnsureTexture(string path, Func<Color32[]> painter, bool repeat = false)
+    {
+        if (!File.Exists(path))
+        {
+            var px = painter();
+            int n = (int)Mathf.Sqrt(px.Length);
+            var gen = new Texture2D(n, n, TextureFormat.RGBA32, false, false);
+            gen.SetPixels32(px);
+            gen.Apply();
+            File.WriteAllBytes(path, gen.EncodeToPNG());
+            Object.DestroyImmediate(gen);
+        }
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+        var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (ti != null)
+        {
+            ti.mipmapEnabled = false;
+            ti.wrapMode = repeat ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+            ti.SaveAndReimport();
+        }
+        return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+    }
+
+    // Солнце: тёплое ядро + мягкое свечение по краю.
+    static Color32[] SunDiscPixels()
+    {
+        const int N = 256;
+        var px = new Color32[N * N];
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float r = Vector2.Distance(new Vector2(x, y), new Vector2(N, N) * 0.5f) / (N * 0.5f);
+                float core = 1f - Smooth(0.30f, 0.36f, r);
+                float glow = (1f - Smooth(0.36f, 1f, r)) * 0.35f;
+                float a = Mathf.Max(core, glow);
+                var c = new Color(1f, 0.94f, 0.74f) * Mathf.Lerp(0.85f, 1.05f, core);
+                px[y * N + x] = Color32.Lerp(new Color32(0, 0, 0, 0), (Color32)c, a);
+            }
+        return px;
+    }
+
+    // Луна: холодный диск с парой тёмных пятен-морей.
+    static Color32[] MoonDiscPixels()
+    {
+        const int N = 256;
+        var px = new Color32[N * N];
+        var craters = new[] {
+            new Vector2(0.42f, 0.60f), new Vector2(0.60f, 0.38f), new Vector2(0.38f, 0.36f)
+        };
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                var uv = new Vector2(x, y) / N;
+                float r = Vector2.Distance(uv, Vector2.one * 0.5f) / 0.5f;
+                float a = Mathf.Max(1f - Smooth(0.33f, 0.38f, r),
+                                    (1f - Smooth(0.4f, 1f, r)) * 0.12f);
+                var c = new Color(0.85f, 0.89f, 1f);
+                foreach (var k in craters)
+                    c *= Mathf.Lerp(1f, 0.82f, 1f - Smooth(0.03f, 0.07f, Vector2.Distance(uv, k)));
+                px[y * N + x] = Color32.Lerp(new Color32(0, 0, 0, 0), (Color32)(c * 1f), a);
+            }
+        return px;
+    }
+
+    // Облака: тайловый value-noise, мягкая пороговая альфа.
+    static Color32[] CloudPixels()
+    {
+        const int N = 512;
+        var px = new Color32[N * N];
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float u = (float)x / N, v = (float)y / N;
+                float n = 0.55f * VNoise(u, v, 6) + 0.30f * VNoise(u, v, 12) + 0.15f * VNoise(u, v, 24);
+                float a = Smooth(0.52f, 0.75f, n) * 0.85f;
+                px[y * N + x] = new Color(1f, 1f, 1f, a);
+            }
+        return px;
+    }
+
+    static float VNoise(float u, float v, int cells)
+    {
+        float x = u * cells, y = v * cells;
+        int ix = Mathf.FloorToInt(x), iy = Mathf.FloorToInt(y);
+        float fx = x - ix, fy = y - iy;
+        fx = fx * fx * (3f - 2f * fx);
+        fy = fy * fy * (3f - 2f * fy);
+        float a = VHash(ix, iy, cells), b = VHash(ix + 1, iy, cells);
+        float c = VHash(ix, iy + 1, cells), d = VHash(ix + 1, iy + 1, cells);
+        return Mathf.Lerp(Mathf.Lerp(a, b, fx), Mathf.Lerp(c, d, fx), fy);
+    }
+
+    static float VHash(int x, int y, int cells)
+    {
+        // целочисленный хеш с заворотом — облака тайлятся без швов
+        x = ((x % cells) + cells) % cells;
+        y = ((y % cells) + cells) % cells;
+        int h = x * 374761393 + y * 668265263;
+        h = (h ^ (h >> 13)) * 1274126177;
+        return ((h ^ (h >> 16)) & 0xffff) / 65535f;
+    }
+
+    static float Smooth(float a, float b, float x)
+    {
+        float t = Mathf.Clamp01((x - a) / (b - a));
+        return t * t * (3f - 2f * t);
+    }
+
+    // Белая «майонезная» версия модели: клон GLB, все материалы —
+    // матовый майонез. Сохраняем префабом — годится и для иконки,
+    // и для вида в руке.
+    static GameObject MakeWhiteModel(string glbName, string assetName)
+    {
+        var src = LoadModel(glbName);
+        if (src == null) return null;
+        var go = PrefabUtility.InstantiatePrefab(src) as GameObject;
+        if (go == null) go = Object.Instantiate(src);
+        foreach (var r in go.GetComponentsInChildren<Renderer>())
+        {
+            var m = new Material(Shader.Find("Standard"));
+            m.color = new Color(0.96f, 0.96f, 0.90f);
+            m.SetFloat("_Glossiness", 0.25f);
+            r.sharedMaterial = m;
+        }
+        EnsureFolder("Assets/Prefabs/Items");
+        var path = $"Assets/Prefabs/Items/{assetName}.prefab";
+        var asset = PrefabUtility.SaveAsPrefabAsset(go, path);
+        Object.DestroyImmediate(go);
+        return asset;
     }
 
     static void EnsureFolder(string path)

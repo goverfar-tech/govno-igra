@@ -50,11 +50,19 @@ public class Player : MonoBehaviour
     IInteractable focus;
     string lastPrompt;
 
+    // Точка возрождения (§9.5): последний костёр, у которого грелись
+    // (ставит Campfire в Update, пока игрок в радиусе тепла).
+    // Пока ни одного — просыпаемся на старте сцены.
+    public static Vector3 lastCampfirePos;
+    public static bool hasCampfireSpawn;
+    Vector3 spawnPos;
+
     void Awake()
     {
         cc = GetComponent<CharacterController>();
         Inventory = GetComponent<Inventory>();
         Stats = GetComponent<Stats>();
+        spawnPos = transform.position;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
@@ -193,6 +201,38 @@ public class Player : MonoBehaviour
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         pitch = newPitch;
         if (head != null) head.localEulerAngles = new Vector3(pitch, 0f, 0f);
+    }
+
+    // Возрождение по §9.5 (corpse run): весь инвентарь вываливается
+    // дропом на месте смерти, игрок просыпается у последнего костра
+    // (или на старте) с половиной ведра. Мир не пересоздаётся.
+    // Ночную стаю снимаем — иначе заруинят прямо на точке респауна.
+    public void Respawn()
+    {
+        var inv = Inventory;
+        for (int i = 0; i < inv.slots.Count; i++)
+        {
+            var s = inv.slots[i];
+            if (s.IsEmpty || inv.pickupPrefab == null) continue;
+            // раскладываем по кругу (золотой угол), чтобы не лепить в одну
+            // точку; посадку на землю делает сам PickupItem
+            float ang = i * 2.39996f;
+            var drop = Instantiate(inv.pickupPrefab,
+                transform.position + new Vector3(Mathf.Cos(ang) * 0.8f, 0.5f, Mathf.Sin(ang) * 0.8f),
+                Quaternion.identity);
+            drop.item = s.item;
+            drop.count = s.count;
+            s.item = null; s.count = 0;
+        }
+        GameEvents.RaiseInventoryChanged();
+        inv.Select(0);
+
+        foreach (var z in FindObjectsByType<Zombie>()) Destroy(z.gameObject);
+
+        Teleport(hasCampfireSpawn ? lastCampfirePos + Vector3.up * 0.6f : spawnPos);
+        Stats.SetState(Stats.maxMayo * 0.5f, 0f); // полведра; сбросит IsDead,
+                                                  // экран смерти гаснет по StatsChanged
+        GameEvents.RaiseNotify("Ты очнулся. Вещи остались там, где ты упал.");
     }
 
     void LateUpdate()

@@ -66,6 +66,9 @@ public class Campfire : MonoBehaviour, IInteractable
         if (near)
         {
             player.Stats.lastWarmTime = Time.time;
+            // костёр — точка возрождения (§9.5): последний, у которого грелись
+            Player.lastCampfirePos = transform.position;
+            Player.hasCampfireSpawn = true;
             if (!toldWarm)
             {
                 toldWarm = true;

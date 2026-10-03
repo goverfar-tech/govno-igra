@@ -33,11 +33,13 @@ public class DeathScreen : MonoBehaviour
         sub.text = "Майонез вытек до конца.";
         sub.color = new Color(1f, 1f, 1f, 0.6f);
 
-        var btn = UiWidgets.Button(veil.transform, "RestartButton", "Начать заново", 20);
+        // §9.5: смерть — corpse run. Кнопка поднимает у последнего костра,
+        // инвентарь остаётся на месте гибели; полный сброс мира — у паузы.
+        var btn = UiWidgets.Button(veil.transform, "RestartButton", "Воскреснуть у костра", 20);
         var brt = (RectTransform)btn.transform;
         brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.5f);
         brt.anchoredPosition = new Vector2(0f, -52f);
-        brt.sizeDelta = new Vector2(240f, 48f);
+        brt.sizeDelta = new Vector2(260f, 48f);
         btn.onClick.AddListener(view.OnRestartClicked);
 
         var keyHint = UiWidgets.Text(veil.transform, "KeyHint", 13);
@@ -45,7 +47,7 @@ public class DeathScreen : MonoBehaviour
         kr.anchorMin = kr.anchorMax = new Vector2(0.5f, 0.5f);
         kr.anchoredPosition = new Vector2(0f, -92f);
         kr.sizeDelta = new Vector2(800f, 20f);
-        keyHint.text = "R — начать заново";
+        keyHint.text = "R — воскреснуть (вещи останутся там, где ты упал)";
         keyHint.color = new Color(1f, 1f, 1f, 0.45f);
 
         veil.gameObject.SetActive(false);

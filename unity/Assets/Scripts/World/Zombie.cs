@@ -73,6 +73,15 @@ public class Zombie : MonoBehaviour
             if (player == null) { Wander(); return; }
         }
 
+        // Труп не атакуем: экран смерти не должен тонуть в спаме
+        // «Зомби выбивает майонез», а стая не должна тусоваться у тела.
+        if (player.Stats.IsDead)
+        {
+            if (state > State.Wander) { state = State.Wander; ResetUnstick(); }
+            Wander();
+            return;
+        }
+
         // Дистанции — строго по горизонтали: 3D-дистанция на склонах
         // «докидывала» разницу высот, и зомби не дотягивался до атаки.
         Vector3 toPlayer = player.transform.position - transform.position;

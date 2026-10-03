@@ -201,7 +201,8 @@ public class Hud : MonoBehaviour
 
         if (dead)
         {
-            if (Input.GetKeyDown(KeyCode.R)) Restart();
+            // смерть — corpse run (§9.5), не рестарт мира
+            if (Input.GetKeyDown(KeyCode.R)) RespawnPlayer();
             return;
         }
 
@@ -254,7 +255,7 @@ public class Hud : MonoBehaviour
         inventoryPanel = InventoryPanelView.Create(crt, inventory);
         craftPanel = CraftPanel.Create(crt, inventory);
         deathScreen = DeathScreen.Create(crt);
-        deathScreen.RestartRequested = Restart;
+        deathScreen.RestartRequested = RespawnPlayer; // §9.5: воскрешение, мир сохраняется
         pauseMenu = PauseMenu.Create(crt);
         pauseMenu.ResumeRequested = () => SetPaused(false);
         pauseMenu.SettingsRequested = () => OpenSettings(false);
@@ -495,6 +496,18 @@ public class Hud : MonoBehaviour
         mainMenu.Close();
         SyncUiActive();
         SyncTimeScale();
+    }
+
+    // Смерть — не конец забега (§9.5): дроп инвентаря на месте смерти,
+    // воскрешение у последнего костра. Полный сброс мира — только
+    // осознанным «Начать заново» из паузы (Restart там и остаётся).
+    void RespawnPlayer()
+    {
+        var player = FindAnyObjectByType<Player>();
+        if (player == null) { Restart(); return; } // страховка на странную сцену
+        // Stats.SetState внутри сбросит IsDead и кинет StatsChanged —
+        // OnStatsChanged сам скроет экран смерти и разблокирует ввод
+        player.Respawn();
     }
 
     void Restart()

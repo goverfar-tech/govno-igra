@@ -37,6 +37,9 @@ public class ToastFeed : MonoBehaviour
         if (entries.Count >= maxVisible) RemoveOldest();
 
         var back = UiWidgets.Panel(transform, "Toast", UiWidgets.PanelColor);
+        // тост — только информация: кликов/драгов он ловить не должен,
+        // иначе вешается поверх экрана смерти и не даёт нажать кнопки
+        back.raycastTarget = false;
         var rt = (RectTransform)back.transform;
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
         rt.pivot = new Vector2(0.5f, 1f);

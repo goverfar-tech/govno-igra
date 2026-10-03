@@ -5,7 +5,8 @@ using UnityEngine;
 
 // Один раз собирает и сохраняет сцену Assets/Scenes/Main.unity:
 // земля, солнце с DayNight, игрок (капсула + Player/Inventory/Stats,
-// Head с камерой), DebugHud, деревья и камни как ResourceNode (50/18 шт),
+// Head с камерой), DebugHud, деревья и камни как ResourceNode (базово 50/18
+// шт, масштабируются от TerrainGen.Size — см. блок рассеивания),
 // силуэты-«сторожа» по краю карты и две пасхалки §9.7 (Monument_Bucket,
 // MayoMonolith) как чистый визуал. ItemData-ассеты (древесина/камень/плоть/
 // фляги/яйцо/майонез; ягоды и их кусты убраны автором 2026-10-03,
@@ -117,7 +118,10 @@ public static class SetupMainScene
         var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
         var meat = SyncItem("meat", "Сырая плоть", 10, food: 12f, poison: 30f);      // §9.3: мало + яд
         SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f);              // готовка режет яд
-        var egg = SyncItem("egg", "Яйцо", 10, food: 8f);
+        // Яйца больше НЕ еда (решение автора 2026-10-03): персонаж —
+        // майонезное ведро, ест только майонез и его производные (котлеты).
+        // food: 0 — сырое яйцо лишь ингредиент рецепта «Домашний майонез».
+        var egg = SyncItem("egg", "Яйцо", 10, food: 0f);
         var mayo = SyncItem("mayo", "Домашний майонез", 10, food: 35f, heal: 5f);   // чистая еда §9.3
         var spear = SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
         var campfire = SyncItem("campfire", "Костёр", 5, isPlaceable: true, placeablePrefab: campfirePrefab);
@@ -150,14 +154,24 @@ public static class SetupMainScene
         SpawnPickup(pickupPrefabAsset, flaskEmpty, 1, OnGround(1.5f, 2f, 0.3f));
 
         // --- мир M4: рассеивание по seed + озеро ---
+        // Весь блок масштабируется от TerrainGen.Size: количества — от
+        // площади (sizeScale², кольцо периметра — линейно), радиусы — от
+        // размера карты. При Size=200 вылезают те же числа, что были
+        // «магическими»: 50 деревьев, 18 камней, кольцо 14–90 м, периметр
+        // 88–96 м. Клампы Mathf.Max не дают выродиться при уменьшении карты.
         var rng = new System.Random(1337);
+        float sizeScale = TerrainGen.Size / 200f;
+        // радиусы кольца рассеивания: 0.07*Size..0.45*Size (14..90 м при 200),
+        // внешний — гарантированно не дальше края карты
+        float scatterMinR = 0.07f * TerrainGen.Size;
+        float scatterMaxR = Mathf.Min(0.45f * TerrainGen.Size, TerrainGen.Size / 2f - 2f);
 
-        // деревья (50 шт, все добываемые)
-        const int treeTotal = 50;
+        // деревья (все добываемые; количество ∝ площади карты)
+        int treeTotal = Mathf.Max(50, Mathf.RoundToInt(50 * sizeScale * sizeScale));
         int treesSkipped = 0;
         for (int i = 0; i < treeTotal; i++)
         {
-            var t = SpawnModel(i % 3 == 0 ? "tree-tall" : "tree", RandomPos(rng, 14f, 90f),
+            var t = SpawnModel(i % 3 == 0 ? "tree-tall" : "tree", RandomPos(rng, scatterMinR, scatterMaxR),
                 "Tree" + i, 2.6f + (float)rng.NextDouble() * 0.8f);
             if (t == null) { treesSkipped++; continue; }
             var tc = t.AddComponent<CapsuleCollider>();
@@ -170,13 +184,13 @@ public static class SetupMainScene
         if (treesSkipped > 0)
             missing.AppendLine($"scatter trees: пропущено {treesSkipped} из {treeTotal} (нет GLB-моделей)");
 
-        // камни (18 шт)
+        // камни (количество ∝ площади карты)
         string[] rockModels = { "rock-a", "rock-b", "rock-c" };
-        const int rockTotal = 18;
+        int rockTotal = Mathf.Max(18, Mathf.RoundToInt(18 * sizeScale * sizeScale));
         int rocksSkipped = 0;
         for (int i = 0; i < rockTotal; i++)
         {
-            var r = SpawnModel(rockModels[i % 3], RandomPos(rng, 14f, 90f),
+            var r = SpawnModel(rockModels[i % 3], RandomPos(rng, scatterMinR, scatterMaxR),
                 "Rock" + i, 1.5f + (float)rng.NextDouble() * 0.7f);
             if (r == null) { rocksSkipped++; continue; }
             var rc = r.AddComponent<BoxCollider>();
@@ -193,19 +207,23 @@ public static class SetupMainScene
         // → в missing-отчёте для них строк тоже не держим.
 
         // --- силуэты по периметру: край карты не должен быть пустым ---
-        // Кольцо на 88–96 м от центра (карта ±100 м, дальше не лезем):
-        // редкие крупные камни и мёртвые деревья. Это АТМОСФЕРА, не забор:
-        // коллайдер ставим только большим камням, деревья-силуэты — декор.
+        // Кольцо 0.44*Size..0.48*Size от центра (88–96 м при Size=200, карта
+        // ±Size/2, край не задеваем): редкие крупные камни и мёртвые деревья.
+        // Это АТМОСФЕРА, не забор: коллайдер ставим только большим камням,
+        // деревья-силуэты — декор.
         string[] edgeRocks = { "rock-sand-a", "rock-sand-b", "rock-sand-c" };
         string[] edgeDeadTrees = { "tree-trunk", "tree-autumn-trunk", "tree-autumn-tall" };
-        const int edgeTotal = 14;
+        // кольцо, а не площадь → количество масштабируется линейно, не квадратично
+        int edgeTotal = Mathf.Max(14, Mathf.RoundToInt(14 * sizeScale));
+        float edgeMinR = 0.44f * TerrainGen.Size;
+        float edgeMaxR = Mathf.Min(0.48f * TerrainGen.Size, TerrainGen.Size / 2f - 2f);
         int edgeSkipped = 0;
         for (int i = 0; i < edgeTotal; i++)
         {
             // равномерный обход круга + джиттер, чтобы не «забор из столбов»
             float ang = i / (float)edgeTotal * Mathf.PI * 2f
                         + ((float)rng.NextDouble() - 0.5f) * 0.35f;
-            float r = Mathf.Lerp(88f, 96f, (float)rng.NextDouble());
+            float r = Mathf.Lerp(edgeMinR, edgeMaxR, (float)rng.NextDouble());
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
             bool isRock = rng.Next(0, 2) == 0;
             string model = isRock

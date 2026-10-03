@@ -23,6 +23,9 @@ public static class SetupMainScene
         var missing = new System.Text.StringBuilder();
 
         // --- сцена ---
+        // спрашиваем про несохранённые правки текущей сцены — NewScene(Single)
+        // сотрёт её молча, отмена диалога = отмена всего Setup
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
         var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
 
         // убрать дефолтную камеру — своя будет в Head игрока
@@ -45,13 +48,24 @@ public static class SetupMainScene
         ground.AddComponent<MeshCollider>().sharedMesh = terrainMesh;
 
         // --- солнце + день/ночь ---
-        var sun = GameObject.Find("Directional Light")?.GetComponent<Light>();
-        if (sun != null)
+        // Ищем ЛЮБОЙ включённый directional-свет (имя «Directional Light»
+        // не гарантировано — без него ночь молча не наступала бы никогда).
+        Light sun = null;
+        foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+            if (l.type == LightType.Directional && l.enabled) { sun = l; break; }
+        if (sun == null)
         {
-            sun.shadows = LightShadows.Soft;
-            var dayNight = sun.gameObject.AddComponent<DayNight>();
-            dayNight.sun = sun;
+            // солнца в сцене нет — создаём своё (вращение/яркость потом
+            // каждый кадр выставляет DayNight, здесь лишь разумный старт)
+            var sunGo = new GameObject("Sun");
+            sunGo.transform.rotation = Quaternion.Euler(50f, 170f, 0f);
+            sun = sunGo.AddComponent<Light>();
+            sun.type = LightType.Directional;
+            sun.intensity = 1.1f;
         }
+        sun.shadows = LightShadows.Soft;
+        var dayNight = sun.gameObject.AddComponent<DayNight>();
+        dayNight.sun = sun;
 
         // --- игрок ---
         var playerGo = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -124,6 +138,9 @@ public static class SetupMainScene
             pickupPrefabAsset = AssetDatabase.LoadAssetAtPath<PickupItem>("Assets/Prefabs/Pickup.prefab");
         }
         playerGo.GetComponent<Inventory>().pickupPrefab = pickupPrefabAsset; // для выброса по ПКМ
+        if (pickupPrefabAsset == null)
+            // без префаба тихо ломаются: выброс ПКМ и дроп мяса с зомби
+            missing.AppendLine("pickup prefab (tree-log.glb)");
 
         // --- у спауна только случайная пустая фляга (тайник снесён,
         // экономика — крафт; аудит механик 2026-10) ---
@@ -152,7 +169,7 @@ public static class SetupMainScene
         {
             var r = SpawnModel(rockModels[i % 3], RandomPos(rng, 14f, 90f),
                 "Rock" + i, 1.5f + (float)rng.NextDouble() * 0.7f);
-            if (r == null) continue;
+            if (r == null) { if (i == 0) missing.AppendLine("scatter rocks"); continue; }
             var rc = r.AddComponent<BoxCollider>();
             rc.center = new Vector3(0f, 0.5f, 0f);
             rc.size = new Vector3(1.2f, 1f, 1.2f);
@@ -164,7 +181,7 @@ public static class SetupMainScene
         for (int i = 0; i < 10; i++)
         {
             var b = SpawnModel("grass-large", RandomPos(rng, 10f, 80f), "Bush" + i, 2f);
-            if (b == null) continue;
+            if (b == null) { if (i == 0) missing.AppendLine("scatter bushes"); continue; }
             var bc = b.AddComponent<SphereCollider>();
             bc.isTrigger = true; // куст не блокирует движение
             bc.center = new Vector3(0f, 0.5f, 0f);
@@ -190,11 +207,15 @@ public static class SetupMainScene
 
         // зона взаимодействия: тонкий немасштабированный бокс на уровне воды
         // (луч не попадает в триггер, стартуя изнутри него, поэтому НЕ
-        // trigger — «стоять на воде» у кромки выглядит как мелководье)
+        // trigger — «стоять на воде» у кромки выглядит как мелководье).
+        // Вода — юнит-цилиндр с localScale = LakeRadius*1.6 → её диаметр
+        // 1.6*R; бокс вписываем в круг с запасом: сторона ≈ 0.9 * диаметр,
+        // чтобы зона визуально совпадала с кромкой воды.
         var zone = new GameObject("InteractZone");
         zone.transform.SetParent(lake.transform, false);
         var zoneCol = zone.AddComponent<BoxCollider>();
-        zoneCol.size = new Vector3(14f, 0.2f, 14f);
+        float zoneSide = TerrainGen.LakeRadius * 1.6f * 0.9f; // 0.9 * диаметр воды
+        zoneCol.size = new Vector3(zoneSide, 0.2f, zoneSide);
         var waterSource = zone.AddComponent<WaterSource>();
         waterSource.emptyFlask = flaskEmpty;
         waterSource.fullFlask = flask;
@@ -224,8 +245,18 @@ public static class SetupMainScene
         // --- сохранить сцену и добавить в Build Settings ---
         EnsureFolder("Assets/Scenes");
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Main.unity");
-        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Main.unity", true) };
+        // Main должна быть первой в списке, прочие сцены билда не роняем
+        var buildScenes = new List<EditorBuildSettingsScene>
+            { new EditorBuildSettingsScene("Assets/Scenes/Main.unity", true) };
+        foreach (var s in EditorBuildSettings.scenes)
+            if (s.path != "Assets/Scenes/Main.unity")
+                buildScenes.Add(s);
+        EditorBuildSettings.scenes = buildScenes.ToArray();
         AssetDatabase.SaveAssets();
+
+        // NewScene(Single) создала сцену без Hud — довешиваем его сразу,
+        // чтобы не требовался отдельный запуск меню «Setup HUD»
+        SetupHud.Run();
 
         Debug.Log($"[Survival] Сцена Main собрана и сохранена. Жми Play!");
         string msg = missing.Length == 0
@@ -250,7 +281,16 @@ public static class SetupMainScene
         string oldPath = $"Assets/Items/{id}.asset";
         if (AssetDatabase.LoadAssetAtPath<ItemData>(path) == null
             && AssetDatabase.LoadAssetAtPath<ItemData>(oldPath) != null)
-            AssetDatabase.MoveAsset(oldPath, path);
+        {
+            // цель могла появиться между проверками (дубль-файл) —
+            // MoveAsset тогда падает: вместо падения удаляем устаревший источник
+            string moveErr = AssetDatabase.MoveAsset(oldPath, path);
+            if (!string.IsNullOrEmpty(moveErr))
+            {
+                Debug.LogWarning($"[Survival] «{id}»: MoveAsset не удался ({moveErr}) — удаляю дубль-источник {oldPath}.");
+                AssetDatabase.DeleteAsset(oldPath);
+            }
+        }
         var item = AssetDatabase.LoadAssetAtPath<ItemData>(path);
         bool created = item == null;
         if (created) item = ScriptableObject.CreateInstance<ItemData>();
@@ -266,7 +306,14 @@ public static class SetupMainScene
         item.isTool = isTool;
         item.toolDamage = toolDamage;
         item.isPlaceable = isPlaceable;
-        if (worldModel != null) item.worldModel = LoadModel(worldModel);
+        if (worldModel != null)
+        {
+            // модель перезаписываем ТОЛЬКО при успешной загрузке —
+            // иначе сбой импорта GLB затирал бы worldModel в null
+            var wm = LoadModel(worldModel);
+            if (wm != null) item.worldModel = wm;
+            else Debug.LogWarning($"[Survival] worldModel «{worldModel}» не загрузился — у «{id}» оставлено прежнее значение.");
+        }
         if (placeablePrefab != null) item.placeablePrefab = placeablePrefab;
 
         if (created) AssetDatabase.CreateAsset(item, path);

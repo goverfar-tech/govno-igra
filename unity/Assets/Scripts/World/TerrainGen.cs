@@ -27,6 +27,11 @@ public static class TerrainGen
 
     static readonly Vector2 off1 = new Vector2(13.7f, 7.1f);
     static readonly Vector2 off2 = new Vector2(91.3f, 44.9f);
+    // Крупные октавы холмистости (усиление по фидбеку автора 2026-10-03):
+    // гряды с периодом ~250 м (до +7 м) и средние бугры. Берег защищён
+    // последним слоем HeightAt — пляж и дно перекрывают их как и раньше.
+    static readonly Vector2 off3 = new Vector2(41.2f, 17.9f);
+    static readonly Vector2 off4 = new Vector2(7.7f, 83.1f);
 
     // Точка в океане: за отмелью и ниже уровня воды (запас 0.35 — на кромку
     // прибоя). Зовут чужие скрипты — не менять сигнатуру.
@@ -36,7 +41,12 @@ public static class TerrainGen
     public static float HeightAt(float x, float z)
     {
         float h = Mathf.PerlinNoise(x * Freq + off1.x, z * Freq + off1.y) * Amp
-                + Mathf.PerlinNoise(x * Freq * 3f + off2.x, z * Freq * 3f + off2.y) * Amp * 0.25f;
+                + Mathf.PerlinNoise(x * Freq * 3f + off2.x, z * Freq * 3f + off2.y) * Amp * 0.25f
+                // усиление холмистости по фидбеку автора (2026-10-03): две
+                // крупные октавы — гряды ~250 м и средние бугры ~70 м.
+                // Берег защищён последним слоем, плато/город перекроют холмы
+                + Mathf.PerlinNoise(x * Freq * 0.25f + off3.x, z * Freq * 0.25f + off3.y) * Amp * 1.4f
+                + Mathf.PerlinNoise(x * Freq * 0.7f + off4.x, z * Freq * 0.7f + off4.y) * Amp * 0.45f;
 
         // плато у спауна (центр): ровное место под базу
         float dSpawn = new Vector2(x, z).magnitude;

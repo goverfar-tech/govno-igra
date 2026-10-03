@@ -63,6 +63,13 @@ public class SaveSystem : MonoBehaviour
         public List<PlacedData> placed = new List<PlacedData>();
         public List<NodeData> nodes = new List<NodeData>();
         public List<WaterData> waters = new List<WaterData>();
+        // Добавлено позже остальных (туман войны миникарты + обысканные
+        // лут-объекты). НЕобязательные поля: в старых сейвах v2 их нет —
+        // JsonUtility молча подставит пустые дефолты (null/"") при
+        // загрузке. version намеренно не менялся, чтобы не выкидывать
+        // сейвы автора; DecodeFog(null) = туман закрыт, looted null = сундуков не обыскано.
+        public string exploredFog;
+        public List<string> looted;
     }
 
     static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
@@ -140,6 +147,11 @@ public class SaveSystem : MonoBehaviour
         // Лужи: остаток «меления» в секундах.
         foreach (var w in FindObjectsByType<WaterSource>(FindObjectsSortMode.None))
             data.waters.Add(new WaterData { name = w.name, cooldown = w.RemainingCooldown });
+
+        // Туман войны миникарты и обысканные лут-объекты (новые необязательные
+        // поля SaveData — см. комментарий в классе).
+        data.exploredFog = Minimap.EncodeFog();
+        data.looted = LootContainer.Capture();
 
         try
         {
@@ -281,6 +293,12 @@ public class SaveSystem : MonoBehaviour
         foreach (var w in FindObjectsByType<WaterSource>(FindObjectsSortMode.None))
             if (waterByName.TryGetValue(w.name, out var wd))
                 w.RemainingCooldown = wd.cooldown;
+
+        // туман войны + обысканные лут-объекты: null/пусто (старый сейв v2)
+        // = туман закрыт, Restore не зовём. Имена Loot_* детерминированы
+        // Setup'ом, поэтому совпадают с миром, только что восстановленным выше.
+        if (data.looted != null) LootContainer.Restore(data.looted);
+        Minimap.DecodeFog(data.exploredFog);
 
         var dayNight = FindFirstObjectByType<DayNight>();
         if (dayNight != null) dayNight.timeOfDay = data.timeOfDay;

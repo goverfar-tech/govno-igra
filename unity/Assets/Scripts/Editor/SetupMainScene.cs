@@ -70,25 +70,49 @@ public static class SetupMainScene
             chunkGo.AddComponent<MeshCollider>().sharedMesh = chunkMesh;
         }
 
-        // --- океан протухшего майонеза: диск на уровне моря ---
-        // Радиус 707.1 м покрывает квадрат 1000×1000 до самых углов. Никаких
-        // невидимых стенок — упасть в океан можно, выплыть нельзя (смерть
-        // в Player.cs). Коллайдер у поверхности убран, как у лужи.
+        // --- океан протухшего майонеза: сетка с бегущими волнами ---
+        // Квадрат 1414×1414 м (покрывает карту 1000 и все углы) вместо
+        // цилиндра: вершины качает шейдер MayoWaves, разводы плывут по
+        // MayoSwirl. Коллайдера по-прежнему нет — упасть в океан можно,
+        // выбраться нельзя (смерть в Player.cs).
+        EnsureFolder("Assets/Textures"); // MayoSwirl рядом с текстурами неба
         var seaRoot = new GameObject("MayoSea");
-        var seaSurface = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        seaSurface.name = "Surface";
+        var seaSurface = new GameObject("Surface");
         seaSurface.transform.SetParent(seaRoot.transform, false);
-        seaSurface.transform.localScale = new Vector3(1414.2f, 0.02f, 1414.2f);
-        // верх диска на сантиметр НИЖЕ уровня моря: плато спауна стоит ровно
-        // на 0 (SeaLevel), копланарные поверхности мерцали бы z-fighting'ом
-        seaSurface.transform.localPosition = new Vector3(0f, -0.03f, 0f);
-        var seaCol = seaSurface.GetComponent<CapsuleCollider>();
-        if (seaCol != null) Object.DestroyImmediate(seaCol);
-        // свой материал: лужа (Mayo.mat) и океан должны отличаться
-        var seaMat = CreateMaterial("MayoSea", new Color(0.64f, 0.58f, 0.28f));
-        seaMat.SetFloat("_Glossiness", 0.5f); // глянец мёртвой воды; ассет
-                                              // перезаписывается Setup'ом — ок
-        seaSurface.GetComponent<MeshRenderer>().sharedMaterial = seaMat;
+        // гребень волны до +0.38: поверхность утоплена, чтобы волны не
+        // протыкали плато спауна (высота 0) и пляж
+        seaSurface.transform.localPosition = new Vector3(0f, -0.45f, 0f);
+        const int seaRes = 128; // 129² вершин, ячейка ~11 м
+        string seaMeshPath = "Assets/Terrain/MayoSeaGrid.asset";
+        var seaMesh = AssetDatabase.LoadAssetAtPath<Mesh>(seaMeshPath);
+        if (seaMesh != null)
+        {
+            // кэш как у чанков Terrain: вершины пересобираем на месте,
+            // ссылки в сцене не рвутся
+            FillSeaGrid(seaMesh, seaRes);
+            EditorUtility.SetDirty(seaMesh);
+        }
+        else
+        {
+            seaMesh = MayoSeaGrid(seaRes);
+            AssetDatabase.CreateAsset(seaMesh, seaMeshPath);
+        }
+        seaSurface.AddComponent<MeshFilter>().sharedMesh = seaMesh;
+
+        var seaMat = CreateMaterial("MayoSea", new Color(0.86f, 0.80f, 0.55f));
+        var swirlTex = EnsureTexture("Assets/Textures/MayoSwirl.png", MayoSwirlPixels, repeat: true);
+        var wavesShader = EnsureMayoWavesShader();
+        if (wavesShader != null)
+        {
+            // CreateMaterial даёт Standard — подменяем шейдер на волновой,
+            // чтобы автор крутил цвет через _Color
+            seaMat.shader = wavesShader;
+            seaMat.mainTexture = swirlTex;
+            seaMat.SetColor("_Color", new Color(0.92f, 0.86f, 0.60f));
+        }
+        else
+            Debug.LogError("[Survival] MayoWaves.shader не загрузился — океан остаётся на Standard, без волн.");
+        seaSurface.AddComponent<MeshRenderer>().sharedMaterial = seaMat;
 
         // --- солнце + день/ночь ---
         // Ищем ЛЮБОЙ включённый directional-свет (имя «Directional Light»
@@ -248,7 +272,7 @@ public static class SetupMainScene
         // плоть зомби в этом мире майонезная — белая (решение автора 2026-10-03)
         var meatMayo = MakeWhiteModel("meat", "meat-mayo");
         if (meatMayo != null) meat.worldModel = meatMayo;
-        SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f, worldModel: "meat-patty");         // готовка режет яд
+        var cookedMeat = SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f, worldModel: "meat-patty"); // готовка режет яд
         // Яйца больше НЕ еда (решение автора 2026-10-03): персонаж —
         // майонезное ведро, ест только майонез и его производные (котлеты).
         // food: 0 — сырое яйцо лишь ингредиент рецепта «Домашний майонез».
@@ -437,22 +461,31 @@ public static class SetupMainScene
         waterSource.emptyFlask = flaskEmpty;
         waterSource.fullFlask = flask;
 
-        // --- городок «Гнилой Причал» (S/мир 2026-10) ---
-        // Терраса под городом плоская (TerrainGen.TownHeight), всё ставится
-        // OnGround без ручного подъёма. Чистый декор без интерактива:
-        // лут-руины — отдельный этап.
+        // --- городок «Гнилой Причал» (S/город 2026-10-03) ---
+        // Осмысленная планировка вместо случайной разрухи: главная улица
+        // по оси «центр острова → причал», площадь с рынком в её начале,
+        // шесть ходибельных домов по сторонам (последний у причала
+        // полуразрушен), причал с перилами и лут в домах/на причале.
+        // Терраса плоская: вся застройка лежит в радиусе 36 м от townC,
+        // где HeightAt == TownHeight ровно.
         Vector2 townC = TerrainGen.TownCenter;
         float townR = townC.magnitude;
-        Vector2 pierDir = townC.normalized; // от центра острова наружу — туда причал
+        Vector2 pierDir = townC.normalized;  // ось улицы и причала, наружу
+        Vector2 perpDir = new Vector2(-pierDir.y, pierDir.x);
+
+        // таблица лута контейнеров: фляга, дерево, камень, майонез, котлета
+        var lootTable = new ItemData[] { flask, wood, stone, mayo, cookedMeat };
 
         // прогрев кусков городка: LoadModel синхронно реимпортирует GLB,
-        // на 60+ кусков дешевле один проход. Тип без ассета пишет одну
+        // на 200+ кусков дешевле один проход. Тип без ассета пишет одну
         // строку в missing, и составные блоки с ним пропускаются целиком.
         string[] townPieces = {
             "structure-floor", "tree-trunk", "structure-metal-wall", "structure-metal-doorway",
             "structure-metal-roof", "bedroll", "signpost", "barrel", "barrel-open",
-            "box-large", "box-large-open", "chest", "campfire-pit",
-            "fence", "fence-fortified", "fence-doorway", "tent", "tent-canvas", "tent-canvas-half"
+            "box-large", "box-large-open", "chest", "campfire-pit", "fence",
+            // типы заброшенностей: раньше грузились мимо словаря и молча
+            // не спавнились — теперь прогреваются вместе с городом
+            "box-open", "signpost-single", "resource-planks"
         };
         var townPrefab = new Dictionary<string, GameObject>();
         foreach (var piece in townPieces)
@@ -462,207 +495,333 @@ public static class SetupMainScene
             else townPrefab[piece] = loaded;
         }
 
-        // причал: два ряда секций-настила шагом 2 м от кромки городка наружу,
-        // до IslandRadius+10 — конец настила висит над открытой водой.
-        // Настил НЕ следует дну: над водой держится на уровне моря +0.4.
-        // Секции приплюснуты по Y: у structure-floor в GLB полметра «ног»,
-        // настил должен быть доской.
+        // --- главная улица: мощёная, две полосы тайлов по 2 м (ширина 4 м),
+        // от площади (r = townR-26) до входа на причал (r = townR+8), шаг 2 м.
+        // Тайл structure-floor 0.5 м -> масштаб 4; приплюснут по Y, как настил
+        // (в GLB у секции полметра «ног»). Коллайдер по габаритам — ступенька
+        // 0.16 м, CharacterController заходит.
         if (townPrefab.ContainsKey("structure-floor"))
         {
-            Vector2 perp = new Vector2(-pierDir.y, pierDir.x);
-            const float pierUp = 0.4f;     // над землёй/водой
-            const float secScale = 3f;     // секция 0.75 -> 2.25 м
-            const float secY = 0.3f;       // толщина настила ~0.16 м
+            const float secScale = 4f; // тайл 0.5 -> 2.0 м
+            const float secY = 0.3f;   // толщина плиты ~0.16 м
             int secI = 0;
-            for (float d = townR + 10f; d <= TerrainGen.IslandRadius + 10f + 0.01f; d += 2f)
+            for (float d = -26f; d <= 8f + 0.01f; d += 2f)
             {
                 secI++;
-                Vector2 mid = townC + pierDir * d;
-                for (int row = 0; row < 2; row++)
+                for (int lane = 0; lane < 2; lane++)
                 {
-                    Vector2 p = mid + perp * (row * 1.2f - 0.6f);
-                    float deckY = Mathf.Max(TerrainGen.HeightAt(p.x, p.y) + pierUp,
-                                            TerrainGen.SeaLevel + pierUp);
+                    Vector2 p = townC + pierDir * d + perpDir * (lane * 2f - 1f);
                     var sec = SpawnTownPiece(townPrefab, "structure-floor",
-                        new Vector3(p.x, deckY, p.y),
-                        "Pier_Section_" + secI + (row == 0 ? "" : "b"));
-                    if (sec != null)
-                        sec.transform.GetChild(0).localScale = new Vector3(secScale, secY, secScale);
-                }
-            }
-
-            // опоры: стволы от y=-1 до настила, под каждую третью секцию
-            if (townPrefab.ContainsKey("tree-trunk"))
-            {
-                const float trunkH = 0.261f; // высота ствола в GLB
-                int postI = 0;
-                for (float d = townR + 12f; d <= TerrainGen.IslandRadius + 10f; d += 6f)
-                {
-                    Vector2 p = townC + pierDir * d;
-                    float deckY = Mathf.Max(TerrainGen.HeightAt(p.x, p.y) + pierUp,
-                                            TerrainGen.SeaLevel + pierUp);
-                    var post = SpawnTownPiece(townPrefab, "tree-trunk",
-                        new Vector3(p.x, -1f, p.y), "Pier_Post_" + (++postI));
-                    if (post != null)
-                        post.transform.GetChild(0).localScale =
-                            new Vector3(2.2f, (deckY + 1f) / trunkH, 2.2f); // 0.44 м толщиной
+                        OnGround(p.x, p.y), "Street_" + secI + (lane == 0 ? "" : "_b"));
+                    if (sec == null) continue;
+                    sec.transform.GetChild(0).localScale = new Vector3(secScale, secY, secScale);
+                    AddPieceCollider(sec);
                 }
             }
         }
 
-        // лачуги: 4 стены-панели вокруг квадрата 3.2 м, вход (+Z, дверной
-        // проём) смотрит на площадь. Стена GLB 0.535×0.5 → масштаб 6 даёт
-        // 3.2×3.0 м. Панель в GLB лежит на РЕБРЕ тайла (сдвиг 0.224 от
-        // центра), иначе стены съезжают внутрь квадрата.
+        // --- площадь в начале улицы (r = townR-26): знак, бочки горкой,
+        // ящик, сундук, холодный очаг. SpawnTownPiece не вешает Campfire —
+        // очаг декор, живой ставится игроком. Всё по бокам от полос улицы
+        // (|перп| >= 2.4), чтобы не перекрывать мощёную дорогу.
+        Vector2 sqC = townC - pierDir * 26f;
+        Vector2 signPos = sqC + perpDir * 2.6f + pierDir * 1.5f;
+        var signpost = SpawnTownPiece(townPrefab, "signpost",
+            OnGround(signPos.x, signPos.y), "Town_Signpost", 6f);
+        if (signpost != null)
+            signpost.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        string[] barrelRow = { "barrel", "barrel-open", "barrel" };
+        for (int i = 0; i < 3; i++)
+        {
+            Vector2 bp = sqC - perpDir * 4.6f - pierDir * 1.0f
+                       + perpDir * (i * 1.1f) + pierDir * ((i % 2) * 0.9f);
+            var barrelGo = SpawnTownPiece(townPrefab, barrelRow[i],
+                OnGround(bp.x, bp.y), "Town_Barrel_" + i, 2.5f);
+            if (barrelGo != null)
+                barrelGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        }
+        Vector2 boxPos = sqC + perpDir * 3.1f - pierDir * 2.2f;
+        var boxGo = SpawnTownPiece(townPrefab, "box-large-open",
+            OnGround(boxPos.x, boxPos.y), "Town_Box", 2.5f);
+        if (boxGo != null)
+            boxGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        Vector2 chestPos = sqC + perpDir * 3.4f + pierDir * 0.6f;
+        var chestGo = SpawnTownPiece(townPrefab, "chest",
+            OnGround(chestPos.x, chestPos.y), "Town_Chest", 2.5f);
+        if (chestGo != null)
+            chestGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        Vector2 pitPos = sqC - pierDir * 3.0f;
+        SpawnTownPiece(townPrefab, "campfire-pit", OnGround(pitPos.x, pitPos.y), "Town_Firepit", 3.5f);
+
+        // навес рынка: плита-«пол» на 4 столбах стволов, высота 2.4 м —
+        // под ним свободно проходят. Декор без коллайдеров.
+        if (townPrefab.ContainsKey("tree-trunk") && townPrefab.ContainsKey("structure-floor"))
+        {
+            Vector2 mc = sqC - perpDir * 4.0f + pierDir * 1.2f;
+            const float canopyH = 2.4f;
+            const float trunkH = 0.2608f; // высота ствола в GLB
+            for (int i = 0; i < 4; i++)
+            {
+                float sx = i % 2 == 0 ? -1f : 1f;
+                float sz = i < 2 ? -1f : 1f;
+                Vector2 pp = mc + (perpDir * sx + pierDir * sz) * 1.1f;
+                var post = SpawnTownPiece(townPrefab, "tree-trunk",
+                    OnGround(pp.x, pp.y), "Town_Market_Post_" + i);
+                if (post != null)
+                    post.transform.GetChild(0).localScale =
+                        new Vector3(1.4f, canopyH / trunkH, 1.4f);
+            }
+            var canopy = SpawnTownPiece(townPrefab, "structure-floor",
+                new Vector3(mc.x, TerrainGen.TownHeight + canopyH, mc.y), "Town_Market_Canopy");
+            if (canopy != null)
+                canopy.transform.GetChild(0).localScale = new Vector3(6.4f, 0.4f, 6.4f);
+        }
+
+        // --- дома вдоль улицы: 6 штук по обе стороны, фасад в 5.5 м от оси,
+        // шаг вдоль 10 м, косость фасада ±4°. Панель стены 0.535×0.5 м,
+        // масштаб 6 -> 3.2×3.0; полотно в GLB лежит на ребре тайла (сдвиг
+        // 0.2233 от пивота) — компенсируем в позиции корня, как в старых
+        // лачугах. Дома ходибельные: фундамент-плита 4×4 со ступенькой
+        // 0.16 м, коллайдеры на стенах и фундаменте, дверной проём открыт
+        // (косяки + перемычка, размеры по замеру GLB). Дом 6 (последний,
+        // у причала) полуразрушен: без крыши, задняя стена отвалилась под
+        // 25-40°. В домах 1-2 перегородка и лежанка, в домах 1/3/5 —
+        // сундук или ящик с лут-контейнером Loot_Town_N.
         if (townPrefab.ContainsKey("structure-metal-wall")
             && townPrefab.ContainsKey("structure-metal-doorway"))
         {
             const float wallScale = 6f;
-            const float half = 1.6f;
-            const float edge = half + 0.224f * wallScale;
+            const float roomHalf = 1.6f;
+            const float wallOff = roomHalf + 0.2233f * wallScale; // пивот панели
+            const float foundY = 0.165f;    // верх фундамента (0.5487 * 0.3)
             float wallH = 0.5f * wallScale; // верх стен — сюда кладём крышу
-            int shackTotal = 7;
-            for (int i = 0; i < shackTotal; i++)
+            int lootI = 0;
+            for (int i = 0; i < 6; i++)
             {
-                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float rr = Mathf.Lerp(12f, 28f, (float)rng.NextDouble());
-                Vector2 sp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rr;
-                var shack = new GameObject("Shack_" + i);
-                shack.transform.position = OnGround(sp.x, sp.y);
-                shack.transform.rotation = Quaternion.Euler(0f,
-                    Mathf.Atan2(townC.x - sp.x, townC.y - sp.y) * Mathf.Rad2Deg
-                    + ((float)rng.NextDouble() - 0.5f) * 40f, 0f);
+                int s = i < 3 ? 1 : -1; // сторона улицы
+                float d = s > 0 ? -18f + i * 10f : -13f + (i - 3) * 10f;
+                bool ruined = i == 5;
+                bool twoRooms = i == 0 || i == 1;
+                bool withLoot = i == 0 || i == 2 || i == 4;
+                string hn = "Town_House_" + (i + 1);
 
-                bool noRoof = i % 2 == 1;              // каждая вторая — без крыши
-                bool fallenWall = i > 0 && i % 3 == 0; // у части отвалилась стена
+                Vector2 hp = townC + pierDir * d + perpDir * (s * (roomHalf + 5.5f));
+                var house = new GameObject(hn);
+                house.transform.position = OnGround(hp.x, hp.y);
+                // фасад к улице: +Z дома смотрит через дорогу, косость ±4°
+                Quaternion face = Quaternion.LookRotation(
+                    new Vector3(-s * perpDir.x, 0f, -s * perpDir.y));
+                house.transform.rotation =
+                    Quaternion.Euler(0f, ((float)rng.NextDouble() - 0.5f) * 8f, 0f) * face;
 
-                string[] sideNames = { "WallN", "WallE", "WallS", "WallW" };
-                Vector3[] sidePos = {
-                    new Vector3(0f, 0f, edge), new Vector3(edge, 0f, 0f),
-                    new Vector3(0f, 0f, -edge), new Vector3(-edge, 0f, 0f)
-                };
-                float[] sideYaw = { 0f, 90f, 180f, 270f };
-                for (int side = 0; side < 4; side++)
-                {
-                    var piece = SpawnTownPiece(townPrefab,
-                        side == 0 ? "structure-metal-doorway" : "structure-metal-wall",
-                        Vector3.zero, "Shack_" + i + "_" + sideNames[side], wallScale);
-                    if (piece == null) continue;
-                    piece.transform.SetParent(shack.transform, false);
-                    if (fallenWall && side == 2)
+                // фундамент: 2×2 секции -> плита 4×4 м, чуть шире стен
+                if (townPrefab.ContainsKey("structure-floor"))
+                    for (int f = 0; f < 4; f++)
                     {
-                        // задняя стена повернута на 20-40° и отвалила от дома
+                        var fsec = SpawnTownPiece(townPrefab, "structure-floor",
+                            Vector3.zero, hn + "_Found_" + f);
+                        if (fsec == null) continue;
+                        fsec.transform.SetParent(house.transform, false);
+                        fsec.transform.localPosition =
+                            new Vector3((f % 2) * 2f - 1f, 0f, (f / 2) * 2f - 1f);
+                        fsec.transform.GetChild(0).localScale = new Vector3(4f, 0.3f, 4f);
+                        AddPieceCollider(fsec); // по нему ходят
+                    }
+
+                // вход: дверная панель к улице, проём не запираем коллайдером
+                var door = SpawnTownPiece(townPrefab, "structure-metal-doorway",
+                    Vector3.zero, hn + "_Door", wallScale);
+                if (door != null)
+                {
+                    door.transform.SetParent(house.transform, false);
+                    door.transform.localPosition = new Vector3(0f, foundY, wallOff);
+                    AddDoorwayColliders(door);
+                }
+
+                // глухие стены E/S/W
+                string[] sideNames = { "WallE", "WallS", "WallW" };
+                Vector3[] sidePos = {
+                    new Vector3(wallOff, foundY, 0f), new Vector3(0f, foundY, -wallOff),
+                    new Vector3(-wallOff, foundY, 0f) };
+                float[] sideYaw = { 90f, 180f, 270f };
+                for (int side = 0; side < 3; side++)
+                {
+                    var piece = SpawnTownPiece(townPrefab, "structure-metal-wall",
+                        Vector3.zero, hn + "_" + sideNames[side], wallScale);
+                    if (piece == null) continue;
+                    piece.transform.SetParent(house.transform, false);
+                    if (ruined && side == 1)
+                    {
+                        // задняя стена отвалилась: наклон 25-40° и отвал от дома
                         piece.transform.localRotation = Quaternion.Euler(0f,
-                            sideYaw[side] + 20f + (float)rng.NextDouble() * 20f,
-                            (float)rng.NextDouble() * 15f);
-                        piece.transform.localPosition = sidePos[side] * 1.45f;
+                            sideYaw[side] + ((float)rng.NextDouble() - 0.5f) * 20f,
+                            25f + (float)rng.NextDouble() * 15f);
+                        piece.transform.localPosition = sidePos[side] * 1.4f;
                     }
                     else
                     {
                         piece.transform.localRotation = Quaternion.Euler(0f, sideYaw[side], 0f);
                         piece.transform.localPosition = sidePos[side];
                     }
+                    AddPieceCollider(piece, 0.15f);
                 }
 
-                if (!noRoof && townPrefab.ContainsKey("structure-metal-roof"))
+                // крыша (у разрушенного дома нет)
+                if (!ruined && townPrefab.ContainsKey("structure-metal-roof"))
                 {
                     var roof = SpawnTownPiece(townPrefab, "structure-metal-roof",
-                        Vector3.zero, "Shack_" + i + "_Roof");
+                        Vector3.zero, hn + "_Roof");
                     if (roof != null)
                     {
-                        roof.transform.SetParent(shack.transform, false);
+                        roof.transform.SetParent(house.transform, false);
                         // 6 по пятну (3.3 м, со свесом), 2.2 по высоте конька
                         roof.transform.GetChild(0).localScale = new Vector3(6f, 2.2f, 6f);
-                        roof.transform.localPosition = new Vector3(0f, wallH, 0f);
+                        roof.transform.localPosition = new Vector3(0f, foundY + wallH, 0f);
                     }
                 }
 
-                if (townPrefab.ContainsKey("bedroll") && (i == 0 || i == 4))
-                    SpawnTownPiece(townPrefab, "bedroll",
-                        OnGround(sp.x, sp.y, 0.02f), "Shack_" + i + "_Bedroll", 3f);
+                // перегородка: укороченная панель делит дом на 2 комнаты,
+                // у стен зазор ~0.75 м — протиснуться можно
+                if (twoRooms && townPrefab.ContainsKey("structure-metal-wall"))
+                {
+                    var part = SpawnTownPiece(townPrefab, "structure-metal-wall",
+                        Vector3.zero, hn + "_Partition", wallScale);
+                    if (part != null)
+                    {
+                        part.transform.SetParent(house.transform, false);
+                        // полотно смещено в GLB на -0.2233 от пивота: корень
+                        // ставим так, чтобы полотно легло на z=0 посреди дома
+                        part.transform.localPosition = new Vector3(0f, foundY, 0.2233f * wallScale);
+                        part.transform.GetChild(0).localScale = new Vector3(2.2f, 6f, 6f);
+                        AddPieceCollider(part);
+                    }
+                    if (townPrefab.ContainsKey("bedroll"))
+                    {
+                        var bed = SpawnTownPiece(townPrefab, "bedroll",
+                            Vector3.zero, hn + "_Bedroll", 3f);
+                        if (bed != null)
+                        {
+                            bed.transform.SetParent(house.transform, false);
+                            bed.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                            bed.transform.localPosition = new Vector3(0f, foundY, -0.8f);
+                        }
+                    }
+                }
+
+                // лут: сундук/ящик внутри + невидимый контейнер Loot_Town_N
+                if (withLoot)
+                {
+                    lootI++;
+                    bool useChest = lootI != 2; // дом 3 — открытый ящик
+                    string vis = useChest ? "chest" : "box-large-open";
+                    var lootProp = SpawnTownPiece(townPrefab, vis,
+                        Vector3.zero, hn + (useChest ? "_Chest" : "_Box"), 2.5f);
+                    Vector3 propLocal = new Vector3(-0.8f, foundY, twoRooms ? 0.8f : -0.85f);
+                    if (lootProp != null)
+                    {
+                        lootProp.transform.SetParent(house.transform, false);
+                        lootProp.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                        lootProp.transform.localPosition = propLocal;
+                    }
+                    SpawnLootPoint(house.transform.TransformPoint(propLocal + Vector3.up * 0.35f),
+                        "Loot_Town_" + lootI, lootTable, 2);
+                }
             }
         }
 
-        // площадь: знак, тара, сундук, холодный очаг. SpawnTownPiece не
-        // вешает Campfire — очаг просто декор, живой ставится игроком.
-        // Масштабы 2.5–3.5 вместо «1» из спеки: GLB-куски 0.2–0.5 юнита,
-        // при масштабе 1 бочка вышла бы 34 см ростом.
-        SpawnTownPiece(townPrefab, "signpost", OnGround(townC.x, townC.y), "Town_Signpost", 6f);
-        string[] barrelRow = { "barrel", "barrel-open", "barrel" };
-        for (int i = 0; i < 3; i++)
+        // --- причал: 3 ряда настила (~5.2 м шириной) от кромки городка
+        // (r = townR+10) наружу до IslandRadius+10, площадка разворота
+        // +2 ряда на конце. Над водой держится уровня моря +0.4 (принцип
+        // прежнего причала), над землёй стелется по грунту — иначе у входа
+        // с мостовой ступенька 0.4 м, которую не пройти. Тайл 0.5 м ->
+        // масштаб 3.5 (1.75 м), ряды вплотную. Коллайдеры на секциях:
+        // причал — единственная сухая дорога к морю.
+        if (townPrefab.ContainsKey("structure-floor"))
         {
-            float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
-            float rr = 2.5f + (float)rng.NextDouble() * 3.5f;
-            Vector2 bp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rr;
-            var barrelGo = SpawnTownPiece(townPrefab, barrelRow[i],
-                OnGround(bp.x, bp.y), "Town_Barrel_" + i, 2.5f);
-            if (barrelGo != null)
-                barrelGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-        }
-        Vector2 boxPos = townC + new Vector2(3.5f, 2f);
-        var boxGo = SpawnTownPiece(townPrefab, rng.Next(0, 2) == 0 ? "box-large-open" : "box-large",
-            OnGround(boxPos.x, boxPos.y), "Town_Box", 2.5f);
-        if (boxGo != null)
-            boxGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-        Vector2 chestPos = townC + new Vector2(-3f, -2.5f);
-        var chestGo = SpawnTownPiece(townPrefab, "chest",
-            OnGround(chestPos.x, chestPos.y), "Town_Chest", 2.5f);
-        if (chestGo != null)
-            chestGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-        Vector2 pitPos = townC + new Vector2(1.5f, -4f);
-        SpawnTownPiece(townPrefab, "campfire-pit", OnGround(pitPos.x, pitPos.y), "Town_Firepit", 3.5f);
-
-        // забор по кольцу 34 м: два пролёта выбито (второй — случайный),
-        // у выхода на причал — дверной проём. Секции со случайным yaw:
-        // забор брошен, никто его не поправлял.
-        if (townPrefab.ContainsKey("fence") || townPrefab.ContainsKey("fence-fortified"))
-        {
-            const int fenceTotal = 12;
-            const float fenceR = 34f;
-            const float fenceScale = 4f; // секция 0.5 -> 2.0 м
-            float pierAng = Mathf.Atan2(pierDir.y, pierDir.x);
-            float gapAng = (float)rng.NextDouble() * Mathf.PI * 2f;
-            for (int i = 0; i < fenceTotal; i++)
+            Vector2 perp = perpDir;
+            const float pierUpSea = 0.4f;    // над водой: уровень моря +0.4
+            const float pierUpLand = 0.135f; // над землёй: верх настила +0.3
+            const float secScale = 3.5f;     // тайл 0.5 -> 1.75 м
+            const float secY = 0.3f;         // толщина настила ~0.16 м
+            float deckYOf(Vector2 p) => Mathf.Max(TerrainGen.HeightAt(p.x, p.y) + pierUpLand,
+                                                  TerrainGen.SeaLevel + pierUpSea);
+            int secI = 0;
+            for (float d = townR + 10f; d <= TerrainGen.IslandRadius + 14f + 0.01f; d += 2f)
             {
-                float ang = i / (float)fenceTotal * Mathf.PI * 2f;
-                if (Mathf.Abs(Mathf.DeltaAngle(ang, pierAng)) < 0.24f) continue; // проём на причал
-                if (Mathf.Abs(Mathf.DeltaAngle(ang, gapAng)) < 0.3f) continue;   // разрушенный пролёт
-                Vector2 fp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * fenceR;
-                var f = SpawnTownPiece(townPrefab, rng.Next(0, 2) == 0 ? "fence" : "fence-fortified",
-                    OnGround(fp.x, fp.y), "Town_Fence_" + i, fenceScale);
-                if (f != null)
-                    f.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                secI++;
+                for (int row = 0; row < 3; row++)
+                {
+                    Vector2 p = townC + pierDir * d + perp * ((row - 1) * secScale * 0.5f);
+                    var sec = SpawnTownPiece(townPrefab, "structure-floor",
+                        new Vector3(p.x, deckYOf(p), p.y),
+                        "Pier_Section_" + secI + (row == 1 ? "" : (row == 0 ? "_a" : "_b")));
+                    if (sec == null) continue;
+                    sec.transform.GetChild(0).localScale = new Vector3(secScale, secY, secScale);
+                    AddPieceCollider(sec);
+                }
             }
-            Vector2 dp = townC + pierDir * fenceR;
-            var fenceDoor = SpawnTownPiece(townPrefab, "fence-doorway",
-                OnGround(dp.x, dp.y), "Town_Fence_Door", fenceScale);
-            if (fenceDoor != null)
-                fenceDoor.transform.rotation = Quaternion.Euler(0f,
-                    Mathf.Atan2(pierDir.x, pierDir.y) * Mathf.Rad2Deg, 0f); // створка вдоль пути
-        }
 
-        // палатки-руины на краю городка: брошенный лагерь, полотнища
-        // покосились (наклон Z ±10°)
-        string[] tentRow = { "tent", "tent-canvas", "tent-canvas-half" };
-        for (int i = 0; i < tentRow.Length; i++)
-        {
-            float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
-            float rr = 29f + (float)rng.NextDouble() * 4f; // между лачугами и забором
-            Vector2 tp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rr;
-            var tent = SpawnTownPiece(townPrefab, tentRow[i],
-                OnGround(tp.x, tp.y), "Town_Tent_" + i, 5.5f);
-            if (tent != null)
-                tent.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f,
-                    ((float)rng.NextDouble() - 0.5f) * 20f);
+            // опоры: стволы от y=-1 до настила, по обоим краям каждые 4 м
+            if (townPrefab.ContainsKey("tree-trunk"))
+            {
+                const float trunkH = 0.2608f; // высота ствола в GLB
+                int postI = 0;
+                for (float d = townR + 12f; d <= TerrainGen.IslandRadius + 12f; d += 4f)
+                    for (int e = 0; e < 2; e++)
+                    {
+                        Vector2 p = townC + pierDir * d + perp * (e == 0 ? -2.5f : 2.5f);
+                        var post = SpawnTownPiece(townPrefab, "tree-trunk",
+                            new Vector3(p.x, -1f, p.y), "Pier_Post_" + (++postI));
+                        if (post == null) continue;
+                        post.transform.GetChild(0).localScale =
+                            new Vector3(2.2f, (deckYOf(p) + 1f) / trunkH, 2.2f); // 0.44 м толщиной
+                        AddPieceCollider(post);
+                    }
+            }
+
+            // перила: fence-секции по обоим краям через секцию настила
+            // (шаг 4 м), строго вертикально, высота ~1.2 м
+            if (townPrefab.ContainsKey("fence"))
+            {
+                const float railScale = 2.4f; // секция 0.5 -> 1.2 м
+                int railI = 0;
+                for (float d = townR + 10f; d <= TerrainGen.IslandRadius + 12f; d += 4f)
+                    for (int e = 0; e < 2; e++)
+                    {
+                        Vector2 p = townC + pierDir * d + perp * (e == 0 ? -2.5f : 2.5f);
+                        var rail = SpawnTownPiece(townPrefab, "fence",
+                            new Vector3(p.x, deckYOf(p) + 0.1f, p.y),
+                            "Pier_Rail_" + (++railI), railScale);
+                        if (rail == null) continue;
+                        // полотно секции вдоль кромки: локальный X -> perp
+                        rail.transform.rotation = Quaternion.Euler(0f,
+                            Mathf.Atan2(-perp.y, perp.x) * Mathf.Rad2Deg, 0f);
+                        AddPieceCollider(rail);
+                    }
+            }
+
+            // конец причала: бочка и ящик с лутом на площадке разворота
+            Vector2 endMid = townC + pierDir * (TerrainGen.IslandRadius + 13f);
+            float endY = deckYOf(endMid);
+            var pierBarrel = SpawnTownPiece(townPrefab, "barrel",
+                new Vector3(endMid.x - perp.x * 1.2f, endY + secY * 0.5487f, endMid.y - perp.y * 1.2f),
+                "Pier_Barrel", 2.5f);
+            if (pierBarrel != null)
+                pierBarrel.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+            var pierBox = SpawnTownPiece(townPrefab, "box-large-open",
+                new Vector3(endMid.x + perp.x * 1.2f, endY + secY * 0.5487f, endMid.y + perp.y * 1.2f),
+                "Pier_Box", 2.5f);
+            if (pierBox != null)
+                pierBox.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+            SpawnLootPoint(new Vector3(endMid.x, endY + 0.5f, endMid.y), "Loot_Pier_1", lootTable, 2);
         }
 
         // --- заброшенности по острову: обломки лагерей ---
         // Кольцо 0.25–0.40*Size. Точка бракуется, если в океане или ниже
         // уровня воды; до 24 попыток, не нашли сушу — руина пропускается.
-        // Декор без интерактива (лут-руины — этап X).
-        string[] ruinPieces = { "box-open", "signpost-single", "resource-planks" };
-        foreach (var piece in ruinPieces)
-            if (LoadModel(piece) == null) missing.AppendLine("ruins: " + piece + ".glb");
+        // Типы (box-open/signpost-single/resource-planks) прогреты вместе
+        // с городком. В двух первых — целый ящик с лут-контейнером.
+        int lootRuins = 0;
         int ruinsTotal = 6;
         for (int i = 0; i < ruinsTotal; i++)
         {
@@ -684,6 +843,20 @@ public static class SetupMainScene
 
             var ruin = new GameObject("Abandoned_" + i);
             ruin.transform.position = OnGround(rp.x, rp.y);
+
+            // в двух первых заброшенностях — целый ящик с лутом:
+            // невидимый контейнер Loot_Ruins_N над визуалом
+            if (lootRuins < 2 && townPrefab.ContainsKey("box-open"))
+            {
+                lootRuins++;
+                var lootBox = SpawnTownPiece(townPrefab, "box-open",
+                    OnGround(rp.x + 1.2f, rp.y - 0.8f), "Abandoned_" + i + "_LootBox", 2.5f);
+                if (lootBox != null)
+                    lootBox.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                SpawnLootPoint(OnGround(rp.x + 1.2f, rp.y - 0.8f, 0.5f),
+                    "Loot_Ruins_" + lootRuins, lootTable, 2);
+            }
+
             int props = 2 + rng.Next(0, 3); // 2-4 предмета
             for (int pi = 0; pi < props; pi++)
             {
@@ -922,6 +1095,10 @@ public static class SetupMainScene
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
             if (Vector2.Distance(new Vector2(x, z), TerrainGen.LakeCenter) < TerrainGen.LakeRadius + 2f)
                 continue;
+            // случайная растительность/пропсы не растут в городке — иначе
+            // дерево прорастало сквозь дом (фидбек плейтеста 2026-10-03)
+            if (Vector2.Distance(new Vector2(x, z), TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f)
+                continue;
             return OnGround(x, z);
         }
         return OnGround(minR, 0f);
@@ -953,6 +1130,81 @@ public static class SetupMainScene
         model.transform.SetParent(root.transform, false);
         model.transform.localScale = Vector3.one * scale;
         return root;
+    }
+
+    // Коллайдер-бокс по реальным габаритам куска: локальные bounds мешей
+    // проводим через TransformPoint/InverseTransformPoint — точный бокс
+    // выходит при любом повороте корня (наклонённая стена руин), чего
+    // не даёт честный renderer.bounds (мировой AABB вращённой панели
+    // раздут). minThickness: самую тонкую горизонтальную ось не даём
+    // сделать тоньше — листовая стенка иначе прощупывается насквозь.
+    static void AddPieceCollider(GameObject piece, float minThickness = 0f)
+    {
+        var lo = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+        var hi = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+        bool any = false;
+        foreach (var rend in piece.GetComponentsInChildren<Renderer>())
+        {
+            var mf = rend.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) continue;
+            var b = mf.sharedMesh.bounds;
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = rend.transform.TransformPoint(new Vector3(
+                    (i & 1) == 0 ? b.min.x : b.max.x,
+                    (i & 2) == 0 ? b.min.y : b.max.y,
+                    (i & 4) == 0 ? b.min.z : b.max.z));
+                var lp = piece.transform.InverseTransformPoint(corner);
+                lo = Vector3.Min(lo, lp);
+                hi = Vector3.Max(hi, lp);
+                any = true;
+            }
+        }
+        if (!any) return;
+        var col = piece.AddComponent<BoxCollider>();
+        col.center = (lo + hi) * 0.5f;
+        var size = hi - lo;
+        if (minThickness > 0f)
+        {
+            if (size.x <= size.z && size.x < minThickness) size.x = minThickness;
+            else if (size.z < size.x && size.z < minThickness) size.z = minThickness;
+        }
+        col.size = size;
+    }
+
+    // Дверной проём: сплошной бокс по габаритам запер бы дверь. По замеру
+    // GLB (панель x -0.2677..0.2677, глубина z -0.2677..-0.1788, проём
+    // |x| < 0.14 до y = 0.4875) ставим два косяка и перемычку над дверью
+    // (верх проёма 2.93 м при масштабе 6 — игрок проходит свободно).
+    static void AddDoorwayColliders(GameObject door)
+    {
+        const float s = 6f;
+        const float zC = -0.2233f * s; // центр полотна по глубине
+        const float zS = 0.0889f * s;  // глубина панели
+        foreach (float sx in new[] { -1f, 1f })
+        {
+            var jamb = door.AddComponent<BoxCollider>();
+            jamb.center = new Vector3(sx * (0.14f + 0.2677f) * 0.5f * s, 0.25f * s, zC);
+            jamb.size = new Vector3((0.2677f - 0.14f) * s, 0.5f * s, zS);
+        }
+        var head = door.AddComponent<BoxCollider>();
+        head.center = new Vector3(0f, (0.4875f + 0.5175f) * 0.5f * s, zC);
+        head.size = new Vector3(0.3126f * s, 0.03f * s, zS);
+    }
+
+    // Точка лута: невидимый контейнер LootContainer под обычным (НЕ
+    // триггер) боксом — луч взаимодействия бьёт по коллайдеру, как у
+    // WaterSource. Имя GO («Loot_Town_1», «Loot_Pier_1», «Loot_Ruins_2»…)
+    // по которому сейв запоминает обысканность.
+    static void SpawnLootPoint(Vector3 pos, string goName, ItemData[] loot, int rolls)
+    {
+        var go = new GameObject(goName);
+        go.transform.position = pos;
+        var col = go.AddComponent<BoxCollider>();
+        col.size = new Vector3(0.6f, 0.6f, 0.6f);
+        var lc = go.AddComponent<LootContainer>();
+        lc.loot = loot;
+        lc.rolls = rolls;
     }
 
     // Подбираемый предмет на земле (пока все выглядят бревном-заглушкой)
@@ -1113,6 +1365,98 @@ Shader ""Sky/SkyUnlit"" {
         return shader;
     }
 
+    // Волновой шейдер океана (S/океан 2026-10-03). Храним ТЕКСТОМ
+    // исходника по той же причине, что и SkyUnlit: сериализованный
+    // Shader-объект в .shader ломает переимпорт (см. EnsureSkyShader).
+    const string MayoWavesShaderSource = @"
+Shader ""Mayo/MayoWaves"" {
+    Properties { _MainTex (""Swirl"", 2D) = ""white"" {} _Color (""Tint"", Color) = (1,1,1,1) }
+    SubShader {
+        Tags { ""RenderType""=""Opaque"" }
+        CGPROGRAM
+        #pragma surface surf Lambert vertex:vert addshadow
+        sampler2D _MainTex;
+        fixed4 _Color;
+        struct Input { float2 uv_MainTex; float2 slope; };
+        void vert (inout appdata_full v, out Input o) {
+            UNITY_INITIALIZE_OUTPUT(Input, o);
+            float3 wp = mul(unity_ObjectToWorld, v.vertex).xyz;
+            // две бегущие волны ~47 м и ~31 м, фаза от мира — вершин не жалко
+            float p1 = wp.x * 0.134f + _Time.y * 1.7f;
+            float p2 = wp.z * 0.203f + wp.x * 0.05f + _Time.y * 1.1f;
+            v.vertex.y += sin(p1) * 0.22f + sin(p2) * 0.16f;
+            // наклон поверхности = сумма производных — нормаль для света
+            o.slope = 0.22f * 0.134f * cos(p1) + 0.16f * 0.05f * cos(p2);
+            o.slope = float2(o.slope, 0.16f * 0.203f * cos(p2));
+        }
+        void surf (Input IN, inout SurfaceOutput o) {
+            // разводы медленно плывут — поверхность живая даже в штиль
+            float2 uv = IN.uv_MainTex + float2(_Time.x * 0.006f, _Time.x * 0.0035f);
+            o.Albedo = tex2D(_MainTex, uv).rgb * _Color.rgb;
+            o.Normal = normalize(float3(-IN.slope.x, 1.0f, -IN.slope.y));
+            o.Alpha = 1.0;
+        }
+        ENDCG
+    }
+    Fallback ""Diffuse""
+}";
+
+    static Shader EnsureMayoWavesShader()
+    {
+        const string path = "Assets/Shaders/MayoWaves.shader";
+        EnsureFolder("Assets/Shaders");
+        if (!File.Exists(path)
+            || !File.ReadAllText(path).TrimStart().StartsWith("Shader"))
+            File.WriteAllText(path, MayoWavesShaderSource);
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+        var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+        if (shader == null || ShaderUtil.ShaderHasError(shader))
+            Debug.LogError("[Survival] MayoWaves.shader не скомпилировался — океан останется на Standard без волн. Текст ошибки в Console выше.");
+        return shader;
+    }
+
+    // Сетка океана: квадрат 1414×1414 м с центром (0,0) — покрывает карту
+    // 1000 и все углы (707 м от центра). Топология как у чанков
+    // TerrainGen: ряды по Z, тот же порядок обхода треугольников.
+    // UV 0..1 — по ним плывут разводы MayoSwirl.
+    static void FillSeaGrid(Mesh mesh, int res)
+    {
+        mesh.Clear();
+        int side = res + 1;
+        var verts = new Vector3[side * side];
+        var uvs = new Vector2[side * side];
+        const float half = 707.1f; // половина квадрата
+        for (int z = 0; z < side; z++)
+        for (int x = 0; x < side; x++)
+        {
+            verts[z * side + x] = new Vector3(
+                -half + 2f * half * x / res, 0f, -half + 2f * half * z / res);
+            uvs[z * side + x] = new Vector2((float)x / res, (float)z / res);
+        }
+        var tris = new int[res * res * 6];
+        int t = 0;
+        for (int z = 0; z < res; z++)
+        for (int x = 0; x < res; x++)
+        {
+            int i0 = z * side + x, i1 = i0 + 1, i2 = i0 + side, i3 = i2 + 1;
+            tris[t++] = i0; tris[t++] = i2; tris[t++] = i1;
+            tris[t++] = i1; tris[t++] = i2; tris[t++] = i3;
+        }
+        mesh.vertices = verts;
+        mesh.uv = uvs;
+        mesh.triangles = tris;
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+    }
+
+    // Свежий меш океана — для первого создания ассета MayoSeaGrid.asset.
+    static Mesh MayoSeaGrid(int res)
+    {
+        var mesh = new Mesh { name = "MayoSeaGrid" };
+        FillSeaGrid(mesh, res);
+        return mesh;
+    }
+
     static Texture2D EnsureTexture(string path, System.Func<Color32[]> painter, bool repeat = false)
     {
         if (!File.Exists(path))
@@ -1189,6 +1533,29 @@ Shader ""Sky/SkyUnlit"" {
                 float n = 0.55f * VNoise(u, v, 6) + 0.30f * VNoise(u, v, 12) + 0.15f * VNoise(u, v, 24);
                 float a = Smooth(0.52f, 0.75f, n) * 0.85f;
                 px[y * N + x] = new Color(1f, 1f, 1f, a);
+            }
+        return px;
+    }
+
+    // Майонезные разводы океана: непрозрачный (альфа 255) тайловый
+    // value-noise — тёмные прожилки и светлые пятна на кремовой базе.
+    static Color32[] MayoSwirlPixels()
+    {
+        const int N = 512;
+        var px = new Color32[N * N];
+        var baseC = new Color(0.93f, 0.88f, 0.62f);
+        var dark = new Color(0.78f, 0.70f, 0.44f);
+        var light = new Color(0.98f, 0.95f, 0.80f);
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float u = (float)x / N, v = (float)y / N;
+                float n = 0.6f * VNoise(u, v, 5) + 0.4f * VNoise(u, v, 11);
+                float m = 0.55f * VNoise(u + 0.33f, v + 0.71f, 8)
+                        + 0.45f * VNoise(u + 0.13f, v + 0.47f, 17);
+                var c = Color.Lerp(baseC, dark, Smooth(0.38f, 0.75f, n) * 0.8f);
+                c = Color.Lerp(c, light, Smooth(0.5f, 0.85f, m) * 0.7f);
+                px[y * N + x] = c;
             }
         return px;
     }

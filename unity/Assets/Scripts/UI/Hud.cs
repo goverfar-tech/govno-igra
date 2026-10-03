@@ -58,6 +58,7 @@ public class Hud : MonoBehaviour
     float timeOfDay;
     bool isNight;
     HotbarView hotbar;
+    Minimap minimap;    // миникарта с туманом войны (HoMM3-стиль)
     Text promptText;
     ToastFeed toasts;
     InventoryPanelView inventoryPanel;
@@ -295,6 +296,11 @@ public class Hud : MonoBehaviour
         hotbar = HotbarView.Create(crt);
         inventoryPanel = InventoryPanelView.Create(crt, inventory);
         craftPanel = CraftPanel.Create(crt, inventory);
+        // Миникарта: панель/туман/маркеры строит сама, игрока находит сама
+        // (лениво, в тике) — сюда только отдаём канвас. Ставим до модальных
+        // окон: карта лежит ниже экранов смерти/паузы по z.
+        minimap = new GameObject("Minimap", typeof(RectTransform)).AddComponent<Minimap>();
+        minimap.Init(crt);
         BuildDamageVeil(crt); // ДО deathScreen/pauseMenu/mainMenu: вуаль
                               // выше мира и HUD, но под экраном смерти/меню
         deathScreen = DeathScreen.Create(crt);

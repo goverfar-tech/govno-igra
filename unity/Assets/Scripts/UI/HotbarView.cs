@@ -88,7 +88,8 @@ public class HotbarView : MonoBehaviour
     public void Refresh(Inventory inv)
     {
         if (inv == null) return;
-        for (int i = 0; i < slots.Length; i++)
+        int n = Mathf.Min(slots.Length, inv.slots.Count); // страховка от короткого списка
+        for (int i = 0; i < n; i++)
         {
             var s = inv.slots[i];
             var v = slots[i];

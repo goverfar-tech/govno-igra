@@ -15,14 +15,28 @@ public class Inventory : MonoBehaviour
     public const int Size = 20;
     public const int HotbarSize = 5;
 
-    public List<Slot> slots = new List<Slot>();
+    // Список слотов фиксированного размера, ленивое дозаполнение.
+    // Сцена сериализует список пустым (игрок собран сетапом, а наш
+    // Awake ещё не жил), при этом Hud обновляется в СВОЁМ Awake и
+    // читает slots раньше — без дозаполнения ловили IndexOutOfRange,
+    // из-за которого умирал весь UI (2026-10-03).
+    [SerializeField, UnityEngine.Serialization.FormerlySerializedAs("slots")]
+    List<Slot> _slots = new List<Slot>();
+    public List<Slot> slots
+    {
+        get
+        {
+            while (_slots.Count < Size) _slots.Add(new Slot());
+            return _slots;
+        }
+        set => _slots = value;
+    }
     public int selected;            // активный слот хотбара 0..4
     public PickupItem pickupPrefab; // чем выбрасываем предметы в мир
 
     void Awake()
     {
-        if (slots.Count == 0)
-            for (int i = 0; i < Size; i++) slots.Add(new Slot());
+        var _ = slots.Count; // гарантируем заполнение и для внутренних обходов
     }
 
     // Добавить пачку; возвращает, сколько НЕ влезло.

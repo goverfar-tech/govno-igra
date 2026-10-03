@@ -219,6 +219,10 @@ public class Player : MonoBehaviour
             var zombie = hit.collider.GetComponentInParent<Zombie>();
             if (zombie != null)
                 zombie.TakeDamage(item.toolDamage);
+            // босс-пещеры — тот же удар, отдельный тип (не ночная стая)
+            var fat = hit.collider.GetComponentInParent<FatZombie>();
+            if (fat != null)
+                fat.TakeDamage(item.toolDamage);
             // звук попадания + событие на шине (хоть зомби, хоть мир)
             AudioManager.HitAt(hit.point);
             GameEvents.RaiseWorldHit(hit.point);

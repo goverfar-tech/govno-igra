@@ -5,7 +5,7 @@ using UnityEngine;
 // Зомби сами дематериализуются на рассвете (см. Zombie.OnTime).
 public class ZombieSpawner : MonoBehaviour
 {
-    public int perNight = 3;
+    public int perNight = 6; // автор просил больше зомби — остров большой, толпа обязательна
     public float minDist = 22f;
     public float maxDist = 32f;
     public ItemData dropItem;         // сырая плоть
@@ -13,10 +13,11 @@ public class ZombieSpawner : MonoBehaviour
 
     static readonly List<Zombie> alive = new List<Zombie>();
     bool wasNight;
-    int nightsPassed; // эскалация приливов §9.4: +1 зомби каждые 2 ночи
+    int nightsPassed; // эскалация приливов §9.4: +1 зомби за каждую ночь
 
-    // сколько спавнить в эту ночь: мягкий глобальный таймер — ночи растут
-    int EffectivePerNight() => Mathf.Min(perNight + nightsPassed / 2, 8);
+    // сколько спавнить в эту ночь: мягкий глобальный таймер — ночи растут.
+    // Эскалация ускорена (S/баланс 2026-10-03): +1 за КАЖДУЮ ночь, потолок 14
+    int EffectivePerNight() => Mathf.Min(perNight + nightsPassed, 14);
 
     void OnEnable() => GameEvents.TimeOfDayChanged += OnTime;
     void OnDisable() => GameEvents.TimeOfDayChanged -= OnTime;

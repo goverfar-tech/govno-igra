@@ -35,6 +35,11 @@ public class DayNight : MonoBehaviour
     static readonly Color MoonlightColor = new Color(0.62f, 0.72f, 0.95f);
     static readonly Color CloudDayColor = new Color(1f, 1f, 1f, 1f);
     static readonly Color CloudNightColor = new Color(0.10f, 0.11f, 0.16f, 1f);
+    // Туман мира (небо рендерится своим шейдером без тумана): днём
+    // выцветшая майонезная муть, ночью почти чёрная мгла. MayoWaves и
+    // дальность подхватят RenderSettings автоматически.
+    static readonly Color DayFogColor = new Color(0.62f, 0.58f, 0.46f);
+    static readonly Color NightFogColor = new Color(0.045f, 0.05f, 0.07f);
 
     void Awake()
     {
@@ -79,6 +84,11 @@ public class DayNight : MonoBehaviour
         // обзор темнеет и без солнца — иначе удалённый источник света
         // оставлял бы вечный день
         RenderSettings.ambientIntensity = isNight ? 0.15f : Mathf.Lerp(0.35f, 1f, intensity);
+
+        // Туман темнеет вместе с ночью — иначе ночью мгла светится серым
+        // и время суток не читается. dayFactor — та же дневная яркость,
+        // что у солнца/ambient: ночью синус уходит в минус, Clamp01 даёт 0.
+        RenderSettings.fogColor = Color.Lerp(NightFogColor, DayFogColor, intensity);
 
         // Camera.main — поиск по тегу: для неба хватит одного захода на кадр
         UpdateSky(Camera.main, intensity, isNight);

@@ -70,6 +70,11 @@ public class SaveSystem : MonoBehaviour
         // сейвы автора; DecodeFog(null) = туман закрыт, looted null = сундуков не обыскано.
         public string exploredFog;
         public List<string> looted;
+        // Состояние босса-«Жирного» (FatZombie) — часть постоянного мира
+        // (§9.5). Необязательное поле, как exploredFog/looted: в старых
+        // сейвах v2 его нет — JsonUtility молча подставит false → босс
+        // жив. version намеренно не менялся.
+        public bool bossDead;
     }
 
     static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
@@ -152,6 +157,9 @@ public class SaveSystem : MonoBehaviour
         // поля SaveData — см. комментарий в классе).
         data.exploredFog = Minimap.EncodeFog();
         data.looted = LootContainer.Capture();
+
+        // Босс — часть мира (§9.5): убитый остаётся убитым.
+        data.bossDead = FatZombie.CaptureDead();
 
         try
         {
@@ -322,6 +330,11 @@ public class SaveSystem : MonoBehaviour
         // Setup'ом, поэтому совпадают с миром, только что восстановленным выше.
         if (data.looted != null) LootContainer.Restore(data.looted);
         Minimap.DecodeFog(data.exploredFog);
+
+        // Босс (FatZombie): Restore ставит статику — Setup не спавнит
+        // убитого на след. старте сцены, живой экземпляр (если вдруг есть)
+        // уничтожится сам в Awake. Старый сейв v2 без поля → false → жив.
+        FatZombie.Restore(data.bossDead);
 
         var dayNight = FindFirstObjectByType<DayNight>();
         if (dayNight != null) dayNight.timeOfDay = data.timeOfDay;

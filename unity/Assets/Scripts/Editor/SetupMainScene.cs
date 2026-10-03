@@ -6,15 +6,17 @@ using UnityEngine;
 
 // Один раз собирает и сохраняет сцену Assets/Scenes/Main.unity:
 // круглый остров 64 чанками в океане протухшего майонеза, солнце с
-// DayNight, игрок (капсула + Player/Inventory/Stats, Head с камерой),
-// DebugHud, деревья и камни как ResourceNode (базово 50/18 шт,
-// масштабируются от TerrainGen.Size — см. блок рассеивания), городок
-// «Гнилой Причал» с причалом и заброшенностями, силуэты-«сторожа»
-// кольцом на суше и две пасхалки §9.7 (Monument_Bucket, MayoMonolith)
-// как чистый визуал. ItemData-ассеты (древесина/камень/плоть/
-// фляги/яйцо/майонез; ягоды и их кусты убраны автором 2026-10-03,
-// ассет berry.asset остаётся в Resources как балласт — удалить руками
-// при желании).
+// DayNight, линейный туман §9.6 (22–115 м, серо-жёлтая мгла), игрок
+// (капсула + Player/Inventory/Stats, Head с камерой), DebugHud, деревья
+// и камни как ResourceNode (базово 50/18 шт, масштабируются от
+// TerrainGen.Size — см. блок рассеивания), городок «Гнилой Причал»
+// с причалом, гора с пещерой босса FatZombie на северо-западе (вырез —
+// в TerrainGen, свод/стены/арка — примитивами здесь), 4 курицы по
+// квандрантам, силуэты-«сторожа» кольцом на суше и две пасхалки §9.7
+// (Monument_Bucket, MayoMonolith) как чистый визуал. ItemData-ассеты
+// (древесина/камень/плоть/фляги/яйцо/майонез; ягоды и их кусты убраны
+// автором 2026-10-03, ассет berry.asset остаётся в Resources как
+// балласт — удалить руками при желании).
 // Запуск: верхнее меню → Survival → Setup Main Scene.
 public static class SetupMainScene
 {
@@ -39,6 +41,20 @@ public static class SetupMainScene
         // убрать дефолтную камеру — своя будет в Head игрока
         var oldCam = GameObject.Find("Main Camera");
         if (oldCam != null) Object.DestroyImmediate(oldCam);
+
+        // --- туман §9.6 (вариант «встроенный линейный») ---
+        // RenderSettings относится к АКТИВНОЙ сцене — применяется к НОВОЙ
+        // (после NewScene) и обязан встать ДО SaveScene, иначе уйдёт в
+        // предыдущий файл сцены. Линейный туман 22–115 м: обзор сжимается
+        // до зловещего островка видимости, силуэты читаются (§9.6).
+        // Цвет — серо-жёлтая пасмурность; ночью его затемнит DayNight.
+        // Небо (Sky/SkyUnlit) туман игнорит сознательно — диски солнца/луны
+        // видны сквозь мглу; MayoWaves — surface-шейдер, туман подхватит сам.
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.Linear;
+        RenderSettings.fogStartDistance = 22f;
+        RenderSettings.fogEndDistance = 115f;
+        RenderSettings.fogColor = new Color(0.62f, 0.58f, 0.46f);
 
         // --- террейн: остров строится 64 чанками вместо одного меша ---
         // Карта выросла до 1000×1000: единый меш с ячейкой ~1.5 м не влезает
@@ -816,6 +832,128 @@ public static class SetupMainScene
             SpawnLootPoint(new Vector3(endMid.x, endY + 0.5f, endMid.y), "Loot_Pier_1", lootTable, 2);
         }
 
+        // --- пещера и босс (S/пещера 2026-10-03) ---
+        // Гора и вырез (зал r=16 + каньон-вход к центру острова) сделаны в
+        // TerrainGen.HeightAt. Здесь — то, чего heightmap не умеет: свод
+        // залы, стены коридора (гарантированный «коридор», даже если шум
+        // сгладит склон), арка у устья и берлога. Материал один — мрачно-
+        // синеватый камень, ночью в тумане гора читается чёрным силуэтом.
+        var caveMat = CreateMaterial("CaveDark", new Color(0.09f, 0.09f, 0.11f));
+        Vector2 mtC = TerrainGen.MountainCenter;
+        Vector2 caveIn = TerrainGen.CaveInDir;               // луч входа: от вершины к центру острова
+        Vector2 cavePerp = new Vector2(-caveIn.y, caveIn.x); // поперёк коридора
+
+        // локальный помощник: проп пещеры, при отсутствии GLB — строка
+        // в missing, как у остальных блоков
+        GameObject CaveProp(string glb, Vector3 pos, string goName, float scale)
+        {
+            var go = SpawnModel(glb, pos, goName, scale);
+            if (go == null) missing.AppendLine("cave: " + glb + ".glb");
+            return go;
+        }
+
+        // свод залы: каменная плита над полом (CaveFloor+8.5, толщина 1 м,
+        // радиус 17 — накрывает вырез залы r=16 с запасом). Коллайдер снят:
+        // до потолка всё равно не допрыгнуть, лишний коллайдер только путает
+        // рейкасты. Имя GO стабильное: на миникарту пещера не выносится
+        // (мелко), но имена в сцене должны быть предсказуемыми.
+        var caveCeiling = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        var caveCeilingCol = caveCeiling.GetComponent<CapsuleCollider>();
+        if (caveCeilingCol != null) Object.DestroyImmediate(caveCeilingCol);
+        caveCeiling.name = "Cave_Ceiling";
+        caveCeiling.transform.position = new Vector3(mtC.x, TerrainGen.CaveFloor + 8.5f, mtC.y);
+        caveCeiling.transform.localScale = new Vector3(34f, 0.5f, 34f);
+        caveCeiling.GetComponent<MeshRenderer>().sharedMaterial = caveMat;
+
+        // поверх свода — пара камней (декор, стоят на вершине свода,
+        // OnGround-стиль по фиксированной высоте), чтобы вершина горы не
+        // выглядела идеальной площадкой снаружи
+        var summit0 = CaveProp("rock-b",
+            new Vector3(mtC.x - 5f, TerrainGen.CaveFloor + 9f, mtC.y + 3f), "Cave_Summit_Rock_0", 5f);
+        if (summit0 != null)
+            summit0.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        var summit1 = CaveProp("rock-c",
+            new Vector3(mtC.x + 6f, TerrainGen.CaveFloor + 9f, mtC.y - 4f), "Cave_Summit_Rock_1", 4f);
+        if (summit1 != null)
+            summit1.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+
+        // стены каньона: та же геометрия, что вырез в TerrainGen — вдоль
+        // луча входа от 8 м до MountainRadius+6 от центра горы, шаг 4 м,
+        // по 2 стены по бокам ±5.5 м от оси. Боксы 2.5×9×4 стоят от пола
+        // (CaveFloor) до CaveFloor+9; коллайдеры не добавляем — у примитивов
+        // свои, а рельеф вокруг и так высокий: боксы лишь гарантируют
+        // «коридор», если шум сгладит склон.
+        int wallI = 0;
+        for (float d = 8f; d <= TerrainGen.MountainRadius + 6f + 0.01f; d += 4f)
+        {
+            wallI++;
+            for (int side = 0; side < 2; side++)
+            {
+                float sgn = side == 0 ? -1f : 1f;
+                Vector2 wp = mtC + caveIn * d + cavePerp * (sgn * 5.5f);
+                var wallBox = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                wallBox.name = "Cave_Wall_" + wallI + (side == 0 ? "_a" : "_b");
+                wallBox.transform.position = new Vector3(wp.x, TerrainGen.CaveFloor + 4.5f, wp.y);
+                // длинная ось бокса — вдоль коридора
+                wallBox.transform.rotation =
+                    Quaternion.LookRotation(new Vector3(caveIn.x, 0f, caveIn.y));
+                wallBox.transform.localScale = new Vector3(2.5f, 9f, 4f);
+                wallBox.GetComponent<MeshRenderer>().sharedMaterial = caveMat;
+            }
+        }
+
+        // арка входа у устья каньона (на последней паре стен): камень слева,
+        // камень справа, плоская плита сверху — приметные ворота берлоги
+        Vector2 archC = mtC + caveIn * (TerrainGen.MountainRadius + 5f);
+        var archL = CaveProp("rock-a",
+            OnGround(archC.x + cavePerp.x * 6.2f, archC.y + cavePerp.y * 6.2f), "Cave_Arch_Left", 2.5f);
+        if (archL != null)
+            archL.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        var archR = CaveProp("rock-b",
+            OnGround(archC.x - cavePerp.x * 6.2f, archC.y - cavePerp.y * 6.2f), "Cave_Arch_Right", 2.5f);
+        if (archR != null)
+            archR.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        CaveProp("rock-flat",
+            new Vector3(archC.x, TerrainGen.CaveFloor + 9f, archC.y), "Cave_Arch_Top", 2.5f);
+
+        // берлога внутри залы: валуны и куча «костей» (resource-stone)
+        var boulder0 = CaveProp("rock-a", OnGround(mtC.x - 6f, mtC.y + 4f), "Cave_Boulder_0", 2.5f);
+        if (boulder0 != null)
+            boulder0.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        var boulder1 = CaveProp("rock-c", OnGround(mtC.x + 5.5f, mtC.y + 5f), "Cave_Boulder_1", 2.2f);
+        if (boulder1 != null)
+            boulder1.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        var boulder2 = CaveProp("rock-a", OnGround(mtC.x + 2.5f, mtC.y - 6.5f), "Cave_Boulder_2", 2f);
+        if (boulder2 != null)
+            boulder2.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        Vector2[] boneOffs = {
+            new Vector2(-2.6f, 2.4f), new Vector2(2.4f, 1.2f), new Vector2(0.7f, -3.1f)
+        };
+        for (int bone = 0; bone < boneOffs.Length; bone++)
+        {
+            var boneGo = CaveProp("resource-stone",
+                OnGround(mtC.x + boneOffs[bone].x, mtC.y + boneOffs[bone].y),
+                "Cave_Bone_" + bone, 1.3f + bone * 0.25f);
+            if (boneGo != null)
+                boneGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        }
+
+        // босс: сидит в центре залы; убит — не респавнится (состояние в
+        // сейве: FatZombie.Restore/CaptureDead, сохранение ведёт параллельный
+        // поток SaveSystem). Тело босс строит сам, как обычный Zombie.
+        if (!FatZombie.Dead)
+        {
+            var bossGo = new GameObject("FatBoss");
+            bossGo.transform.position = new Vector3(mtC.x, TerrainGen.CaveFloor + 0.2f, mtC.y);
+            var bossCC = bossGo.AddComponent<CharacterController>();
+            bossCC.height = 2.6f;
+            bossCC.radius = 0.9f;
+            bossCC.center = new Vector3(0f, 1.3f, 0f);
+            var boss = bossGo.AddComponent<FatZombie>();
+            boss.dropItem = meat; // с босса падает сырая плоть, как с зомби
+            boss.pickupPrefab = pickupPrefabAsset;
+        }
+
         // --- заброшенности по острову: обломки лагерей ---
         // Кольцо 0.25–0.40*Size. Точка бракуется, если в океане или ниже
         // уровня воды; до 24 попыток, не нашли сушу — руина пропускается.
@@ -923,23 +1061,61 @@ public static class SetupMainScene
             }
         }
 
-        // --- зомби-спавнер (M5): 3 зомби каждую ночь кольцом вокруг игрока ---
+        // --- зомби-спавнер (M5): 6 зомби каждую ночь кольцом вокруг игрока,
+        // +1 за каждую ночь до 14 (автор просил больше зомби) ---
         var spawnerGo = new GameObject("ZombieSpawner");
         var spawner = spawnerGo.AddComponent<ZombieSpawner>();
         spawner.dropItem = meat; // с зомби падает сырая плоть
         spawner.pickupPrefab = pickupPrefabAsset;
 
-        // --- курица (§9.3): одна, далеко от спауна, яйца → домашний
-        // майонез. Остров вырос — прежние 60–85 м теперь почти центр,
-        // 200–380 м — глушь у пляжа ---
-        var chickenPos = RandomPos(rng, 200f, 380f);
-        var chickenGo = new GameObject("Chicken");
-        chickenGo.transform.position = chickenPos;
-        var chickenCC = chickenGo.AddComponent<CharacterController>();
-        chickenCC.height = 1f; chickenCC.radius = 0.35f; chickenCC.center = new Vector3(0f, 0.5f, 0f);
-        var chicken = chickenGo.AddComponent<Chicken>();
-        chicken.eggItem = egg;
-        chicken.pickupPrefab = pickupPrefabAsset;
+        // --- куры (§9.3): четыре, по одной на квандрант карты — «в разных
+        // частях карты» (S/баланс 2026-10-03; раньше была одна). Яйцо раз
+        // в 3 мин на курицу (layInterval в Chicken), не больше 3 штук
+        // вокруг — четыре курицы делают домашний майонез стабильным планом
+        // на еду, а не одной лотереей в глуши. Точка: диагональ квандранта
+        // ±35°, r 200–340 (rng), взаимная дистанция ≥120 м, до 16 попыток;
+        // брак — океан, пляж/пол пещеры (HeightAt ≤ CaveFloor), лужа,
+        // городок и вырез горы (тот же предикат, что в RandomPos).
+        var chickenPts = new Vector2[4];
+        int chickenCount = 0;
+        for (int q = 0; q < 4; q++)
+        {
+            float sx = (q & 1) == 0 ? 1f : -1f;
+            float sz = q < 2 ? 1f : -1f;
+            float baseAng = Mathf.Atan2(sz, sx); // диагональ квандранта (±45°/±135°)
+            for (int attempt = 0; attempt < 16; attempt++)
+            {
+                float ang = baseAng + ((float)rng.NextDouble() - 0.5f) * 70f * Mathf.Deg2Rad;
+                float r = Mathf.Lerp(200f, 340f, (float)rng.NextDouble());
+                float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
+                var p = new Vector2(x, z);
+                if (TerrainGen.IsInOcean(new Vector3(x, 1f, z))) continue;
+                if (TerrainGen.HeightAt(x, z) <= TerrainGen.CaveFloor) continue;
+                if (Vector2.Distance(p, TerrainGen.LakeCenter) < TerrainGen.LakeRadius + 2f) continue;
+                if (Vector2.Distance(p, TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f) continue;
+                if (TerrainGen.HeightAt(x, z) < TerrainGen.CaveFloor + 2f
+                    && Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 6f)
+                    continue; // вырез пещеры в горе
+                bool tooClose = false;
+                for (int prev = 0; prev < chickenCount; prev++)
+                    if (Vector2.Distance(p, chickenPts[prev]) < 120f) { tooClose = true; break; }
+                if (tooClose) continue;
+                chickenPts[chickenCount++] = p;
+                break;
+            }
+        }
+        for (int i = 0; i < chickenCount; i++)
+        {
+            var chickenGo = new GameObject("Chicken_" + (i + 1));
+            chickenGo.transform.position = OnGround(chickenPts[i].x, chickenPts[i].y);
+            var chickenCC = chickenGo.AddComponent<CharacterController>();
+            chickenCC.height = 1f; chickenCC.radius = 0.35f; chickenCC.center = new Vector3(0f, 0.5f, 0f);
+            var chicken = chickenGo.AddComponent<Chicken>();
+            chicken.eggItem = egg;
+            chicken.pickupPrefab = pickupPrefabAsset;
+        }
+        if (chickenCount < 4)
+            missing.AppendLine($"chickens: размещено {chickenCount} из 4 (не нашлось точек в квандрантах)");
 
         // --- рецепт домашнего майонеза (§9.3): яйца x2 ---
         SyncRecipe("mayo", mayo, 1, (egg, 2));
@@ -1099,6 +1275,12 @@ public static class SetupMainScene
             // случайная растительность/пропсы не растут в городке — иначе
             // дерево прорастало сквозь дом (фидбек плейтеста 2026-10-03)
             if (Vector2.Distance(new Vector2(x, z), TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f)
+                continue;
+            // вырез пещеры в горе: низина внутри горы — это пол залы или
+            // каньон-вход, деревьям/камням там не место (S/пещера 2026-10-03)
+            if (TerrainGen.HeightAt(x, z) < TerrainGen.CaveFloor + 2f
+                && Vector2.Distance(new Vector2(x, z), TerrainGen.MountainCenter)
+                    < TerrainGen.MountainRadius + 6f)
                 continue;
             return OnGround(x, z);
         }

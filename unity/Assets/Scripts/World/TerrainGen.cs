@@ -3,7 +3,8 @@ using UnityEngine;
 // Процедурный рельеф по шуму Перлина (аналог terrain.gd из Godot-версии, M4).
 // Одна функция HeightAt используется и для меша, и для расстановки объектов.
 // Мир — круглый остров в океане протухшего майонеза: холмы в центре,
-// к краю пляж-отмель почти вровень с водой, за ним ровное дно (S/мир 2026-10).
+// к краю пляж-отмель почти вровень с водой, за ним ровное дно, на
+// северо-западе — гора с вырезанной пещерой босса (S/мир 2026-10).
 public static class TerrainGen
 {
     public const float Size = 1000f;     // карта 1000×1000 м
@@ -17,6 +18,20 @@ public static class TerrainGen
     public const float TownRadius = 60f;    // терраса городка «Гнилой Причал»
     public const float TownHeight = 2.0f;   // плато городка — чуть выше берега
     public static readonly Vector2 TownCenter = new Vector2(240f, -160f); // r≈288, юго-восток
+
+    // Гора с пещерой босса (S/пещера 2026-10-03), северо-запад острова.
+    // Константы читают Setup (свод/стены каньона) и параллельные скрипты —
+    // имена и значения не менять. Центр на r≈238 от центра острова:
+    // подножие 238+95=333 — ровно до начала полосы отмели (IslandRadius-90
+    // = 330); маска бугра на кромке уже ~0.003, а берег — последний слой
+    // HeightAt, так что пляж гора не ломает (проверено в комментарии слоя).
+    public static readonly Vector2 MountainCenter = new Vector2(-150f, 185f);
+    public const float MountainHeight = 30f;
+    public const float MountainRadius = 95f;
+    public const float CaveFloor = 5f;
+    // направление входа в пещеру: от вершины к центру острова — вход с
+    // юго-восточного склона; тот же вектор использует Setup для стен каньона
+    public static readonly Vector2 CaveInDir = (Vector2.zero - MountainCenter).normalized;
 
     public const int ChunkCount = 8;     // сетка 8×8 = 64 чанка по 125 м
 
@@ -56,6 +71,31 @@ public static class TerrainGen
         float dLake = Vector2.Distance(new Vector2(x, z), LakeCenter);
         float rim = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(LakeRadius * 0.5f, LakeRadius, dLake));
         h -= LakeDepth * (1f - rim);
+
+        // гора с пещерой (S/пещера 2026-10-03): колокол 30 м радиусом 95 на
+        // северо-западе. Слой ПОСЛЕ всех холмов и ДО городской террасы и
+        // берега (порядок: гора → терраса → берег-последний), поэтому город
+        // и пляж её перекрывают, как перекрывали холмы.
+        float dMountain = Vector2.Distance(new Vector2(x, z), MountainCenter);
+        float mtT = dMountain / MountainRadius;
+        float mountainMask = 1f - Smooth01(mtT); // колокол: 1 в центре, 0 на подножии
+        // вершина слегка приплюснута — не остриё: на t<0.15 маска прижата к 0.85
+        if (mtT < 0.15f) mountainMask = 0.85f;
+        h += MountainHeight * mountainMask;
+
+        // вырез пещеры поверх бугра (тот же слой): зал — круг r=16 у вершины,
+        // каньон-вход — полоса шириной 9 м (|перп| ≤ 4.5) вдоль луча от
+        // вершины к центру острова, от 8 м до MountainRadius+6 от центра
+        // горы. Heightmap потолок не умеет — свод ставится примитивом в
+        // Setup, рельеф лишь вырезает вход и зал; пол слегка неровный.
+        Vector2 fromMt = new Vector2(x, z) - MountainCenter;
+        float alongIn = Vector2.Dot(fromMt, CaveInDir);
+        float sideIn = Vector2.Dot(fromMt, new Vector2(-CaveInDir.y, CaveInDir.x));
+        bool inHall = fromMt.sqrMagnitude <= 16f * 16f;
+        bool inCanyon = alongIn >= 8f && alongIn <= MountainRadius + 6f
+                        && Mathf.Abs(sideIn) <= 4.5f;
+        if (inHall || inCanyon)
+            h = Mathf.Min(h, CaveFloor + Mathf.PerlinNoise(x * 0.15f, z * 0.15f) * 0.6f);
 
         // городская терраса: внутри 0.6*TownRadius — ровно TownHeight,
         // к 1.35*TownRadius плавный спуск к естественному рельефу

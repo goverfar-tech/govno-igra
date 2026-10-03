@@ -12,6 +12,15 @@ public class ResourceNode : MonoBehaviour, IInteractable
     // камень = pickaxe (эталон: resource_node.gd tool_id).
     public string requiredToolId = "";
 
+    int maxHits;      // исходный лимит из сцены — верхняя граница для сейвов
+    bool greyedOut;   // посерение одноразовое: обратной раскраски нет
+
+    void Awake()
+    {
+        maxHits = hitsLeft;
+        if (hitsLeft <= 0) GreyOut(); // поднятый из сейва уже обобранным
+    }
+
     public string GetPrompt()
     {
         if (yield == null) return "[E] Добыть";
@@ -47,11 +56,21 @@ public class ResourceNode : MonoBehaviour, IInteractable
         }
     }
 
+    // Восстановление из сейва (SaveSystem): остаток ударов, кламп
+    // 0..исходный максимум; визуал исчерпания — тот же, что при добыче.
+    public void RestoreHitsLeft(int hits)
+    {
+        hitsLeft = Mathf.Clamp(hits, 0, maxHits);
+        if (hitsLeft <= 0) GreyOut();
+    }
+
     // Перекрашиваем модель в тускло-серый. GLB-материалы одни на все
     // инстансы этого глба — поэтому ДЕЛАЕМ КОПИИ (r.material), иначе
     // посерели бы все деревья разом.
     void GreyOut()
     {
+        if (greyedOut) return;
+        greyedOut = true;
         foreach (var r in GetComponentsInChildren<MeshRenderer>())
         {
             var mats = r.materials; // инстанцирует копии

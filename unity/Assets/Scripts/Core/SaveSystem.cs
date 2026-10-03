@@ -4,11 +4,15 @@ using UnityEngine;
 
 // Свободные сейвы (§9.5): F5 — сохранить, F9 — загрузить.
 // JSON один слот в persistentDataPath. Сохраняет: позицию/взгляд игрока,
-// статы, инвентарь, постройки (Placed), время суток.
-// НЕ сохраняет пока: состояние источников (добытые деревья), дроп на земле.
-// Появляется сам при старте любой сцены.
+// статы, инвентарь, постройки (Placed), время суток, состояние узлов
+// добычи (остаток ударов) и кулдаун лужи.
+// НЕ сохраняет пока: дроп на земле (пикапы/яйца).
+// Появляется сам при старте любой сцены; синглтон с DontDestroyOnLoad —
+// переживает перезагрузку сцены (смерть → «Начать заново»).
 public class SaveSystem : MonoBehaviour
 {
+    public static SaveSystem Instance { get; private set; }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
@@ -16,13 +20,30 @@ public class SaveSystem : MonoBehaviour
             new GameObject("SaveSystem").AddComponent<SaveSystem>();
     }
 
+    void Awake()
+    {
+        // Дублёр после перезагрузки сцены — убить, иначе F5/F9 делает
+        // чужой экземпляр или не делает никто.
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+
     [System.Serializable] class SlotData { public string item; public int count; }
     [System.Serializable] class PlacedData { public string item; public Vector3 pos; public float rotY; }
+    [System.Serializable] class NodeData { public string name; public int hits; }
+    [System.Serializable] class WaterData { public string name; public float cooldown; }
 
     [System.Serializable]
     class SaveData
     {
-        public int version = 2; // 2 = эпоха майонеза (hp/food/water → mayo/poison)
+        // НЕ инициализировать: пустой {} должен давать 0 (не пройдёт проверку версии).
+        // 2 = эпоха майонеза (hp/food/water → mayo/poison).
+        public int version;
         public Vector3 playerPos;
         public float yaw, pitch;
         public float mayo, poison;
@@ -30,6 +51,8 @@ public class SaveSystem : MonoBehaviour
         public float timeOfDay;
         public List<SlotData> inventory = new List<SlotData>();
         public List<PlacedData> placed = new List<PlacedData>();
+        public List<NodeData> nodes = new List<NodeData>();
+        public List<WaterData> waters = new List<WaterData>();
     }
 
     static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
@@ -57,11 +80,24 @@ public class SaveSystem : MonoBehaviour
 
     void Save()
     {
+        // Меню/пауза (timeScale == 0): сохранение «в стоячем мире» только путает.
+        if (Time.timeScale <= 0f)
+        {
+            GameEvents.RaiseNotify("Сначала вернитесь в игру");
+            return;
+        }
+
         var player = FindFirstObjectByType<Player>();
-        if (player == null || player.Stats.IsDead) return;
+        if (player == null) return;
+        if (player.Stats.IsDead)
+        {
+            GameEvents.RaiseNotify("Нельзя сохранить мёртвым");
+            return;
+        }
 
         var data = new SaveData
         {
+            version = 2,
             playerPos = player.transform.position,
             yaw = player.transform.eulerAngles.y,
             pitch = player.Pitch,
@@ -84,7 +120,24 @@ public class SaveSystem : MonoBehaviour
                 rotY = p.transform.eulerAngles.y
             });
 
-        File.WriteAllText(SavePath, JsonUtility.ToJson(data, true));
+        // Узлы добычи: детерминированные имена из SetupMainScene (Tree0.., Rock0..).
+        foreach (var n in FindObjectsByType<ResourceNode>(FindObjectsSortMode.None))
+            data.nodes.Add(new NodeData { name = n.name, hits = n.hitsLeft });
+
+        // Лужи: остаток «меления» в секундах.
+        foreach (var w in FindObjectsByType<WaterSource>(FindObjectsSortMode.None))
+            data.waters.Add(new WaterData { name = w.name, cooldown = w.RemainingCooldown });
+
+        try
+        {
+            File.WriteAllText(SavePath, JsonUtility.ToJson(data, true));
+        }
+        catch (IOException e)
+        {
+            Debug.LogWarning("SaveSystem: не удалось записать сейв: " + e.Message);
+            GameEvents.RaiseNotify("Не удалось сохранить сейв");
+            return;
+        }
         GameEvents.RaiseNotify($"Сохранено (всего построек: {data.placed.Count})");
     }
 
@@ -95,7 +148,33 @@ public class SaveSystem : MonoBehaviour
             GameEvents.RaiseNotify("Нет сохранения");
             return;
         }
-        var data = JsonUtility.FromJson<SaveData>(File.ReadAllText(SavePath));
+
+        string json;
+        try
+        {
+            json = File.ReadAllText(SavePath);
+        }
+        catch (IOException e)
+        {
+            Debug.LogWarning("SaveSystem: не удалось прочитать сейв: " + e.Message);
+            GameEvents.RaiseNotify("Не удалось прочитать сейв");
+            return;
+        }
+
+        SaveData data = null;
+        try
+        {
+            data = JsonUtility.FromJson<SaveData>(json);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("SaveSystem: битый JSON: " + e.Message);
+        }
+        if (data == null)
+        {
+            GameEvents.RaiseNotify("Сейв повреждён");
+            return;
+        }
         if (data.version != 2)
         {
             GameEvents.RaiseNotify("Сейв старой версии — не встаёт, начни заново");
@@ -104,12 +183,27 @@ public class SaveSystem : MonoBehaviour
         var player = FindFirstObjectByType<Player>();
         if (player == null) return;
 
+        // id предметов, исчезнувших из проекта со времён сейва — один тост в конце.
+        var lost = new List<string>();
+        void MarkLost(string id)
+        {
+            if (!string.IsNullOrEmpty(id) && !lost.Contains(id)) lost.Add(id);
+        }
+
+        // ночная стая привязана к старой позиции — при загрузке убираем всех
+        foreach (var z in FindObjectsByType<Zombie>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            Destroy(z.gameObject);
+
         // постройки: старые убрать, сохранённые вернуть
         foreach (var p in FindObjectsByType<Placed>(FindObjectsSortMode.None))
             Destroy(p.gameObject);
         foreach (var pd in data.placed)
         {
-            if (!Catalog.TryGetValue(pd.item, out var item) || item.placeablePrefab == null) continue;
+            if (!Catalog.TryGetValue(pd.item, out var item) || item.placeablePrefab == null)
+            {
+                MarkLost(pd.item);
+                continue;
+            }
             var go = Instantiate(item.placeablePrefab, pd.pos, Quaternion.Euler(0f, pd.rotY, 0f));
             go.name = item.displayName;
             var tag = go.GetComponent<Placed>();
@@ -117,28 +211,58 @@ public class SaveSystem : MonoBehaviour
             tag.itemId = pd.item;
         }
 
-        // игрок: позиция, взгляд, статы, инвентарь
+        // игрок: позиция, взгляд, статы, инвентарь.
+        // SetState сам сбрасывает IsDead и шлёт StatsChanged — загрузка = оживление.
+        // Майонез клампим минимум 1: мусорный ноль не должен убивать в момент загрузки.
         player.Teleport(data.playerPos);
         player.ApplyView(data.yaw, data.pitch);
-        player.Stats.SetState(data.mayo, data.poison);
+        player.Stats.SetState(Mathf.Max(1f, data.mayo), data.poison);
 
         for (int i = 0; i < player.Inventory.slots.Count && i < data.inventory.Count; i++)
         {
             var sd = data.inventory[i];
             var slot = player.Inventory.slots[i];
-            if (!string.IsNullOrEmpty(sd.item) && Catalog.TryGetValue(sd.item, out var item))
+            if (!string.IsNullOrEmpty(sd.item))
             {
-                slot.item = item;
-                slot.count = sd.count;
+                if (Catalog.TryGetValue(sd.item, out var item))
+                {
+                    slot.item = item;
+                    slot.count = Mathf.Clamp(sd.count, 1, item.maxStack);
+                }
+                else
+                {
+                    MarkLost(sd.item);
+                    slot.item = null; slot.count = 0;
+                }
             }
             else { slot.item = null; slot.count = 0; }
         }
         player.Inventory.Select(data.selected);
         GameEvents.RaiseInventoryChanged();
 
+        // узлы добычи: восстановить остаток ударов по имени
+        // (имена детерминированы SetupMainScene; не найденные — мир
+        // перегенерился, молча пропускаем)
+        var nodeByName = new Dictionary<string, NodeData>();
+        foreach (var nd in data.nodes)
+            if (!string.IsNullOrEmpty(nd.name)) nodeByName[nd.name] = nd;
+        foreach (var n in FindObjectsByType<ResourceNode>(FindObjectsSortMode.None))
+            if (nodeByName.TryGetValue(n.name, out var nd))
+                n.RestoreHitsLeft(nd.hits);
+
+        // лужи: остаток кулдауна по имени
+        var waterByName = new Dictionary<string, WaterData>();
+        foreach (var wd in data.waters)
+            if (!string.IsNullOrEmpty(wd.name)) waterByName[wd.name] = wd;
+        foreach (var w in FindObjectsByType<WaterSource>(FindObjectsSortMode.None))
+            if (waterByName.TryGetValue(w.name, out var wd))
+                w.RemainingCooldown = wd.cooldown;
+
         var dayNight = FindFirstObjectByType<DayNight>();
         if (dayNight != null) dayNight.timeOfDay = data.timeOfDay;
 
+        if (lost.Count > 0)
+            GameEvents.RaiseNotify("Утеряно при загрузке: " + string.Join(", ", lost));
         GameEvents.RaiseNotify("Загружено");
     }
 

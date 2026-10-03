@@ -83,11 +83,15 @@ public class Stats : MonoBehaviour
         GameEvents.RaiseStatsChanged();
     }
 
-    // Проставить значения из сохранения (SaveSystem).
+    // Проставить значения из сохранения (SaveSystem). Загрузка = оживление:
+    // тело при смерти не уничтожается, поэтому IsDead сбрасываем — иначе
+    // смерть необратима. StatsChanged летит всегда: UI по нему скроет
+    // экран смерти.
     public void SetState(float mayo, float poison)
     {
         Mayo = Mathf.Clamp(mayo, 0f, maxMayo);
         Poison = Mathf.Clamp(poison, 0f, maxPoison);
+        IsDead = false;
         GameEvents.RaiseStatsChanged();
     }
 }

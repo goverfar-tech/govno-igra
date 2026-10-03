@@ -14,6 +14,18 @@ public class PickupItem : MonoBehaviour, IInteractable
 
     void Start()
     {
+        // Садимся на землю: дроп (ПКМ, переполнение, зомби/курица)
+        // спавнится в воздухе/перед грудью — опускаем лучом вниз.
+        // Триггеры (в т.ч. свой коллайдер и другие пикапы) луч игнорирует,
+        // попадание по игроку тоже отсекаем.
+        if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down,
+                out var hit, 30f, ~0, QueryTriggerInteraction.Ignore)
+            && hit.collider.GetComponentInParent<Player>() == null
+            && hit.collider.GetComponentInParent<PickupItem>() == null)
+        {
+            transform.position = hit.point + Vector3.up * 0.05f;
+        }
+
         if (glintMat == null)
         {
             glintMat = new Material(Shader.Find("Standard"))

@@ -13,6 +13,7 @@ public class Campfire : MonoBehaviour, IInteractable
     Player player;
     float nextCook;
     bool toldWarm;
+    float playerSearchRetry; // повторный поиск не чаще раза в секунду
 
     void Awake()
     {
@@ -52,10 +53,14 @@ public class Campfire : MonoBehaviour, IInteractable
 
     void Update()
     {
+        // игрока кэшируем; при потере (рестарт сцены/смерть) ищем заново,
+        // но не каждый кадр. Тепло применяется сразу в кадр находки.
         if (player == null)
         {
+            if (Time.time < playerSearchRetry) return;
+            playerSearchRetry = Time.time + 1f;
             player = FindFirstObjectByType<Player>();
-            return;
+            if (player == null) return; // сцена без игрока (меню)
         }
         bool near = Vector3.Distance(transform.position, player.transform.position) < warmRadius;
         if (near)

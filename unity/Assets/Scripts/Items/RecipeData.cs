@@ -30,8 +30,8 @@ public class RecipeData : ScriptableObject
         return true;
     }
 
-    // Крафт: проверка → снять входы → добавить результат.
-    // Логика слотов и события — внутри Inventory, тосты — через Notify.
+    // Крафт: проверка → снять входы → выдать результат. Что не влезло в
+    // инвентарь — падает пикапом под ноги игрока, ничего не пропадает.
     public bool TryCraft(Inventory inv)
     {
         if (!CanCraft(inv))
@@ -43,9 +43,10 @@ public class RecipeData : ScriptableObject
             inv.RemoveItem(ing.item, ing.count);
 
         int leftover = inv.Add(result, resultCount);
-        if (leftover > 0)
-            GameEvents.RaiseNotify("Инвентарь полон — часть не влезла");
-        GameEvents.RaiseNotify($"Создано: {result.displayName}");
+        if (leftover > 0) inv.DropAtFeet(result, leftover);
+        GameEvents.RaiseNotify(leftover >= resultCount
+            ? "Создано, лишнее под ногами"
+            : $"Создано: {result.displayName}");
         return true;
     }
 }

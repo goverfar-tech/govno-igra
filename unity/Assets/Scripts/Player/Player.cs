@@ -81,7 +81,7 @@ public class Player : MonoBehaviour
         bool uiOwnsInput = inputBlocked || Time.timeScale <= 0f
                            || Cursor.lockState != CursorLockMode.Locked;
         if (!uiOwnsInput) Look();
-        Move();
+        Move(uiOwnsInput);
         if (uiOwnsInput) return;
         UpdateInteractFocus();
 
@@ -127,24 +127,25 @@ public class Player : MonoBehaviour
 
     // Замах оружием: бьёт зомби на toolDamage. Инструментов для добычи
     // больше нет (аудит 2026-10): деревья/камни обдираются руками по E.
+    // false — предмет не оружие: UseSelected попробует его съесть.
     bool SwingTool(ItemData item)
     {
+        if (item == null || !item.isTool) return false;
         if (swingCooldown > 0f) return true;
         swingCooldown = 0.6f;
-        AudioManager.Swing(); // замах слышен всегда
+        AudioManager.Swing(); // замах слышен всегда, даже в молоко
         landOffset = Mathf.Max(landOffset - 0.05f, -0.1f);
 
         var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
         if (Physics.Raycast(origin, (head != null ? head.forward : transform.forward),
-                out var hit, 3f, interactMask))
+                out var hit, interactRange, interactMask))
         {
             var zombie = hit.collider.GetComponentInParent<Zombie>();
             if (zombie != null)
-            {
                 zombie.TakeDamage(item.toolDamage);
-                GameEvents.RaiseWorldHit(hit.point);
-                return true;
-            }
+            // звук попадания + событие на шине (хоть зомби, хоть мир)
+            AudioManager.HitAt(hit.point);
+            GameEvents.RaiseWorldHit(hit.point);
         }
         return true;
     }
@@ -183,6 +184,7 @@ public class Player : MonoBehaviour
         transform.position = pos;
         cc.enabled = true;
         verticalVel = 0f;
+        lastFallVel = 0f; // падение «до» телепорта не считаем
     }
 
     // Установить взгляд из сохранения.
@@ -235,13 +237,17 @@ public class Player : MonoBehaviour
         if (head != null) head.localEulerAngles = new Vector3(pitch, 0f, 0f);
     }
 
-    void Move()
+    void Move(bool uiOwnsInput)
     {
-        bool sprinting = Input.GetKey(KeyCode.LeftShift);
+        // При открытом UI стоим и не бежим (иначе протекает ведро ×1.6
+        // пока игрок копается в инвентаре); гравитацию считаем всегда,
+        // чтобы не висеть в воздухе. Прыжок при UI запрещён.
         bool crouching = Input.GetKey(KeyCode.LeftControl);
+        // спринт считаем только стоя: Shift+Ctrl = присед, утечка не растёт
+        bool sprinting = Input.GetKey(KeyCode.LeftShift) && !crouching && !uiOwnsInput;
 
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
+        float h = uiOwnsInput ? 0f : Input.GetAxisRaw("Horizontal");
+        float v = uiOwnsInput ? 0f : Input.GetAxisRaw("Vertical");
         Vector3 dir = (transform.right * h + transform.forward * v).normalized;
 
         float speed = crouching ? crouchSpeed
@@ -252,11 +258,18 @@ public class Player : MonoBehaviour
         float targetHeight = crouching ? crouchHeight : standHeight;
         if (targetHeight > cc.height + 0.001f)
         {
-            // не встаём сквозь потолок
-            Vector3 from = transform.position + Vector3.up * (cc.height - 0.1f);
-            if (Physics.SphereCast(from, cc.radius * 0.9f, Vector3.up, out _,
-                    targetHeight - cc.height + 0.15f, ~0, QueryTriggerInteraction.Ignore))
-                targetHeight = cc.height;
+            // не встаём сквозь потолок: пересекаем ЦЕЛЕВУЮ (стоячую)
+            // капсулу OverlapCapsule. cc.center = 0 (см. Setup): пивот
+            // посреди капсулы, низ текущей — на -cc.height/2 от него.
+            float r = cc.radius * 0.95f;
+            float bottomLocal = cc.center.y - cc.height * 0.5f;
+            Vector3 low = transform.position + Vector3.up * (bottomLocal + r + 0.02f);
+            Vector3 high = transform.position + Vector3.up * (bottomLocal + targetHeight - r - 0.02f);
+            bool blocked = false;
+            foreach (var col in Physics.OverlapCapsule(low, high, r, ~0,
+                         QueryTriggerInteraction.Ignore))
+                if (col != cc) { blocked = true; break; } // свой контроллер не в счёт
+            if (blocked) targetHeight = cc.height;
         }
         cc.height = Mathf.MoveTowards(cc.height, targetHeight, Time.deltaTime * 6f);
         isCrouchingSmooth = crouching || cc.height < standHeight - 0.01f;
@@ -265,9 +278,10 @@ public class Player : MonoBehaviour
         {
             if (!wasGrounded) // приземление: проседание жёстче от скорости падения
                 landOffset = -Mathf.Clamp(-lastFallVel * 0.018f, 0f, landDipMax);
+            lastFallVel = 0f; // падение отработано — не тащить в след. приземления
             wasGrounded = true;
             verticalVel = -2f;
-            if (Input.GetKeyDown(KeyCode.Space))
+            if (!uiOwnsInput && Input.GetKeyDown(KeyCode.Space))
                 verticalVel = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
         else

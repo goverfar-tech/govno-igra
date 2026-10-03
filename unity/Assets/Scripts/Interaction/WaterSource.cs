@@ -10,6 +10,13 @@ public class WaterSource : MonoBehaviour, IInteractable
 
     float nextFillTime;
 
+    // Остаток «меления» в секундах (SaveSystem сохраняет/восстанавливает).
+    public float RemainingCooldown
+    {
+        get => Mathf.Max(0f, nextFillTime - Time.time);
+        set => nextFillTime = Time.time + Mathf.Max(0f, value);
+    }
+
     public string GetPrompt()
     {
         float left = nextFillTime - Time.time;

@@ -10,7 +10,10 @@ using UnityEngine;
 //                       изменение инвентаря, звук читается как UI-фидбек);
 //   ItemConsumed      — звук еды/питья (событие поднимает тот, кто тратит
 //                       предмет — проводка за пределами Потока Б);
-//   WorldHit          — позиционный «тук» по мировому объекту;
+//   WorldHit          — НЕ подписаны: Player при попадании вызывает
+//                       AudioManager.HitAt напрямую, второй звук через
+//                       подписку давал бы дабл (событие остаётся на шине
+//                       для будущих систем);
 //   Notify            — едва слышный UI-тик на тосты;
 //   PlayerDied        — стинг гибели;
 //   TimeOfDayChanged  — ночью ветер гуще и тоном выше + редкие далёкие
@@ -90,7 +93,8 @@ public class AudioManager : MonoBehaviour
     AudioClip selectClip, openClip, closeClip, pauseClip, crackleClip;
     AudioClip moanClip, heartbeatClip, nightCryClip;
 
-    AudioSource flatSource;      // 2D одношоты (UI/еда/стинг); pitch ставится перед PlayOneShot
+    AudioSource uiSource;        // короткие 2D-блипы (UI/еда/взмах); pitch ставится перед PlayOneShot
+    AudioSource worldFlatSource; // длинные стинги (death): pitch СТРОГО 1 — не делит источник с питч-ездыкающими блипами
     AudioSource stepSource;      // шаги отдельно — не перебивают UI-звуки pitch'ем
     AudioSource windSource;      // зацикленный ветер
 
@@ -106,6 +110,10 @@ public class AudioManager : MonoBehaviour
     Player player;
     CharacterController cc;
     float playerSearchRetry;
+
+    // Дедупе синглтона: дубль (повторный вход в Play и т.п.) не строит
+    // источники и НЕ подписывается на события.
+    bool isMain;
 
     bool isNight;
     float stepAccum;
@@ -130,11 +138,16 @@ public class AudioManager : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
+            // Дубль: просто умираем. Подписок и источников у него нет —
+            // OnEnable/OnDisable их благодаря isMain тоже не тронут.
             Destroy(gameObject);
             return;
         }
         Instance = this;
+        isMain = true;
         DontDestroyOnLoad(gameObject);
+        // Сначала клипы и источники, и только потом подписки (OnEnable):
+        // обработчик события не должен упереться в недостроенный источник.
         BuildClips();
         BuildSources();
     }
@@ -146,9 +159,11 @@ public class AudioManager : MonoBehaviour
 
     void OnEnable()
     {
+        if (!isMain) return; // дубль не подписывается — иначе даблы и NRE
         GameEvents.InventoryChanged += OnInventoryChanged;
         GameEvents.ItemConsumed += OnItemConsumed;
-        GameEvents.WorldHit += OnWorldHit;
+        // WorldHit поднимает Player, звук играет HitAt напрямую — подписка
+        // убрана во избежание дабла (событие остаётся на шине для будущих систем).
         GameEvents.Notify += OnNotify;
         GameEvents.PlayerDied += OnPlayerDied;
         GameEvents.TimeOfDayChanged += OnTimeOfDayChanged;
@@ -160,9 +175,9 @@ public class AudioManager : MonoBehaviour
 
     void OnDisable()
     {
+        if (!isMain) return;
         GameEvents.InventoryChanged -= OnInventoryChanged;
         GameEvents.ItemConsumed -= OnItemConsumed;
-        GameEvents.WorldHit -= OnWorldHit;
         GameEvents.Notify -= OnNotify;
         GameEvents.PlayerDied -= OnPlayerDied;
         GameEvents.TimeOfDayChanged -= OnTimeOfDayChanged;
@@ -201,9 +216,16 @@ public class AudioManager : MonoBehaviour
 
     void BuildSources()
     {
-        flatSource = gameObject.AddComponent<AudioSource>();
-        flatSource.spatialBlend = 0f;
-        flatSource.playOnAwake = false;
+        uiSource = gameObject.AddComponent<AudioSource>();
+        uiSource.spatialBlend = 0f;
+        uiSource.playOnAwake = false;
+
+        // Отдельный источник для длинных стингов: pitch жёстко 1 и не
+        // меняется никогда, иначе UI-блипы «катают» тон играющего стинга.
+        worldFlatSource = gameObject.AddComponent<AudioSource>();
+        worldFlatSource.spatialBlend = 0f;
+        worldFlatSource.playOnAwake = false;
+        worldFlatSource.pitch = 1f;
 
         stepSource = gameObject.AddComponent<AudioSource>();
         stepSource.spatialBlend = 0f;
@@ -213,7 +235,7 @@ public class AudioManager : MonoBehaviour
         windSource.clip = windClip;
         windSource.loop = true;
         windSource.spatialBlend = 0f;
-        windSource.playOnAwake = true;
+        windSource.playOnAwake = false; // двойного запуска нет: стартуем явно
         windSource.volume = Db(windDayDb);
         windSource.Play();
 
@@ -431,32 +453,51 @@ public class AudioManager : MonoBehaviour
     {
         if (Time.time - lastPickupSfx < 0.08f) return; // не дробить пачку событий в кадре
         lastPickupSfx = Time.time;
-        flatSource.pitch = Random.Range(0.97f, 1.04f);
-        flatSource.PlayOneShot(pickupClip, Db(pickupDb));
+        uiSource.pitch = Random.Range(0.97f, 1.04f);
+        uiSource.PlayOneShot(pickupClip, Db(pickupDb));
     }
 
+    // Звук еды/питья. Событие поднимает Inventory.UseSelected; item может
+    // быть null — звук всё равно играем в базовом варианте.
     void OnItemConsumed(ItemData item)
     {
-        flatSource.pitch = Random.Range(0.94f, 1.06f);
-        flatSource.PlayOneShot(eatClip, Db(eatDb));
+        if (uiSource == null || eatClip == null) return;
+        float db = eatDb;
+        float pitch = Random.Range(0.94f, 1.06f);
+        if (item != null)
+        {
+            if (item.waterRestore > 0f && item.foodRestore <= 0f)
+            {
+                pitch += 0.15f; // питьё — глоток: выше и чуть тише жевания
+                db -= 2f;
+            }
+            if (item.poisonAmount > 0f)
+            {
+                pitch -= 0.08f; // ядовитое (§9.3) звучит «мутнее»
+                db += 1f;
+            }
+        }
+        uiSource.pitch = pitch;
+        uiSource.PlayOneShot(eatClip, Db(db));
     }
 
-    void OnWorldHit(Vector3 pos) => PlayHitAt(pos);
+    // Подписки WorldHit здесь намеренно нет — см. OnEnable.
 
     void OnNotify(string text)
     {
         if (Time.time - lastToastSfx < 0.12f) return;
         lastToastSfx = Time.time;
-        flatSource.pitch = 1f;
-        flatSource.PlayOneShot(toastClip, Db(toastDb));
+        uiSource.pitch = 1f;
+        uiSource.PlayOneShot(toastClip, Db(toastDb));
     }
 
     void OnPlayerDied()
     {
         heartbeatTarget = 0f; // сердцу всё
         moanTarget = 0f;
-        flatSource.pitch = 1f;
-        flatSource.PlayOneShot(deathClip, Db(deathDb));
+        // Длинный стинг — на отдельном источнике со строгим pitch=1:
+        // не делить с короткими блипами, которые катают pitch.
+        worldFlatSource.PlayOneShot(deathClip, Db(deathDb));
     }
 
     void OnTimeOfDayChanged(float t, bool night) => isNight = night;
@@ -482,20 +523,20 @@ public class AudioManager : MonoBehaviour
     {
         if (Time.time - lastSelectSfx < 0.05f) return;
         lastSelectSfx = Time.time;
-        flatSource.pitch = Random.Range(0.96f, 1.06f);
-        flatSource.PlayOneShot(selectClip, Db(selectDb));
+        uiSource.pitch = Random.Range(0.96f, 1.06f);
+        uiSource.PlayOneShot(selectClip, Db(selectDb));
     }
 
     void OnInventoryOpenChanged(bool open)
     {
-        flatSource.pitch = Random.Range(0.96f, 1.05f);
-        flatSource.PlayOneShot(open ? openClip : closeClip, Db(rustleDb));
+        uiSource.pitch = Random.Range(0.96f, 1.05f);
+        uiSource.PlayOneShot(open ? openClip : closeClip, Db(rustleDb));
     }
 
     void OnPauseChanged(bool paused)
     {
-        flatSource.pitch = 1f;
-        flatSource.PlayOneShot(pauseClip, Db(pauseDb));
+        uiSource.pitch = 1f;
+        uiSource.PlayOneShot(pauseClip, Db(pauseDb));
     }
 
     // ---------- проигрывание ----------
@@ -503,6 +544,7 @@ public class AudioManager : MonoBehaviour
     // Позиционный одношот: временный AudioSource в мире, самоуничтожается.
     void PlayAt(AudioClip clip, Vector3 pos, float db, float pitch, float maxDist = 32f)
     {
+        if (clip == null) return; // дешёвая страховка от NRE (clip.name ниже)
         var go = new GameObject("sfx3d_" + clip.name);
         go.transform.position = pos;
         var src = go.AddComponent<AudioSource>();
@@ -529,8 +571,8 @@ public class AudioManager : MonoBehaviour
     // Взмах инструментом (воздух).
     public void PlaySwing()
     {
-        flatSource.pitch = Random.Range(0.94f, 1.06f);
-        flatSource.PlayOneShot(whooshClip, Db(swingDb));
+        uiSource.pitch = Random.Range(0.94f, 1.06f);
+        uiSource.PlayOneShot(whooshClip, Db(swingDb));
     }
 
     public static void HitAt(Vector3 pos) { if (Instance != null) Instance.PlayHitAt(pos); }

@@ -18,6 +18,24 @@ public static class ProceduralSfx
 
     static float White() => Random.Range(-1f, 1f);
 
+    // Закольцовка петли БЕЗ щелчка на стыке: хвостовые tail сэмплов
+    // кроссфейдом подмешиваем в начало, затем массив ОБРЕЗАЕМ на tail
+    // сэмплов с конца. Тогда сэмпл 0 обрезанного клипа == исходный сэмпл
+    // (n - tail): на wrap'е позиция не прыгает назад на tail сэмплов,
+    // а продолжает исходный сигнал — скачка фазы и щелчка нет.
+    static AudioClip MakeLoopedClip(string name, float[] f, int tail)
+    {
+        int n = f.Length;
+        for (int i = 0; i < tail; i++)
+        {
+            float a = (float)i / tail;
+            f[i] = Mathf.Lerp(f[n - tail + i], f[i], a);
+        }
+        var trimmed = new float[n - tail];
+        System.Array.Copy(f, trimmed, trimmed.Length);
+        return MakeClip(name, trimmed);
+    }
+
     // Короткий слайд-тон (подбор — вверх, еда — вниз). Порт _make_blip.
     public static AudioClip MakeBlip(string name, float from, float to, float dur)
     {
@@ -110,7 +128,7 @@ public static class ProceduralSfx
 
     // Ветер: глубокий «дышащий» гул с редкими свистящими порывами (§9.6).
     // Порт _make_wind; сверху добавлен полосовой шум-порыв для ночной тоски.
-    // Края сшиты кроссфейдом — клип зацикливается без щелчка.
+    // Петля: края сшиты кроссфейдом с обрезкой хвоста — wrap без щелчка.
     public static AudioClip MakeWind(float dur = 6f)
     {
         int n = Mathf.RoundToInt(SampleRate * dur);
@@ -134,13 +152,7 @@ public static class ProceduralSfx
 
             f[i] = prev * amp + whistle;
         }
-        const int xfade = 2048;
-        for (int i = 0; i < xfade; i++)
-        {
-            float a = (float)i / xfade;
-            f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a);
-        }
-        return MakeClip("sfx_wind", f);
+        return MakeLoopedClip("sfx_wind", f, 2048);
     }
 
     // Кабан: низкий хриплый свинячий тон с шумом. Порт _make_grunt (M5).
@@ -234,7 +246,8 @@ public static class ProceduralSfx
     }
 
     // Треск костра: глухой «гул горения» + случайные деревянные щелчки
-    // (~26 в секунду, гаснут за миллисекунды). Петля, края сшиты кроссфейдом.
+    // (~26 в секунду, гаснут за миллисекунды). Петля: кроссфейд + обрезка
+    // хвоста, wrap без щелчка.
     public static AudioClip MakeCrackle(float dur = 3.5f)
     {
         int n = Mathf.RoundToInt(SampleRate * dur);
@@ -250,17 +263,11 @@ public static class ProceduralSfx
             popLp = popLp * 0.55f + pop * 0.45f;
             f[i] = bed * 0.4f + popLp * 0.5f;
         }
-        const int xfade = 1024;
-        for (int i = 0; i < xfade; i++)
-        {
-            float a = (float)i / xfade;
-            f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a);
-        }
-        return MakeClip("sfx_crackle", f);
+        return MakeLoopedClip("sfx_crackle", f, 1024);
     }
 
     // Чавкающая утечка ведра (R2): мокрый LP-шум + редкие пузыри.
-    // Петля, края сшиты кроссфейдом.
+    // Петля: кроссфейд + обрезка хвоста, wrap без щелчка.
     public static AudioClip MakeSquelch(float dur = 3f)
     {
         int n = Mathf.RoundToInt(SampleRate * dur);
@@ -275,15 +282,14 @@ public static class ProceduralSfx
             blob *= 0.995f;
             f[i] = bed * 0.5f + b;
         }
-        const int xfade = 1024;
-        for (int i = 0; i < xfade; i++) { float a = (float)i / xfade; f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a); }
-        return MakeClip("sfx_squelch", f);
+        return MakeLoopedClip("sfx_squelch", f, 1024);
     }
 
     // Гул-стон зомби: низкий пилящий тон (пила 58 Гц с вибрато, приглаженная
     // ФНЧ, чтобы пугала, а не резала слух) поверх шумового дыхания. Петля;
-    // «дыхание» делает целое число волн за петлю — шва не слышно. Громкостью
-    // по расстоянию управляет AudioManager.
+    // «дыхание» делает целое число волн за петлю, края сшиты кроссфейдом
+    // с обрезкой хвоста — шва не слышно. Громкостью по расстоянию управляет
+    // AudioManager.
     public static AudioClip MakeZombieMoan(float dur = 4f)
     {
         int n = Mathf.RoundToInt(SampleRate * dur);
@@ -302,13 +308,7 @@ public static class ProceduralSfx
             float swell = 0.65f + 0.35f * Mathf.Sin(2f * Mathf.PI * 2f * u); // 2 волны за петлю
             f[i] = (saw * 0.5f + noise * 0.6f) * swell * 0.5f;
         }
-        const int xfade = 2048;
-        for (int i = 0; i < xfade; i++)
-        {
-            float a = (float)i / xfade;
-            f[i] = Mathf.Lerp(f[n - xfade + i], f[i], a);
-        }
-        return MakeClip("sfx_zombie_moan", f);
+        return MakeLoopedClip("sfx_zombie_moan", f, 2048);
     }
 
     // Сердцебиение: «луб-дуп» в тишине, петля period секунд (~1.2 с между

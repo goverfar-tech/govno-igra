@@ -1,18 +1,25 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
+#if UNITY_EDITOR
+using System.IO;
 using UnityEngine.Networking;
+#endif
 
-// MusicManager — дневная/ночная музыка из Assets/Audio (Поток Б, M5).
-// Кладём файлы day*.mp3|day*.wav и night*.mp3|night*.wav — менеджер берёт
-// по одному случайному на сторону суток и кроссфейдит (3–5 сек) по
-// TimeOfDayChanged. Луп — AudioSource.loop; для идеального шва лучше WAV
-// (у mp3 есть кодировочный зазор на стыке петли).
-// Файлов нет — один Debug.Log на старте и дальше тишина, без спама.
-// Внимание: читаем файлы с диска, поэтому для сборок папку надо будет
-// перенести в StreamingAssets — в билд Assets/Audio не упаковывается.
+// MusicManager — дневная/ночная музыка (Поток Б, M5).
+// Источники треков по приоритету:
+//   1) Resources/Music: клипы с именами day* (day1, day_forest, …) и night* —
+//      единственный путь, работающий в билде. Папки может не существовать —
+//      это нормально, LoadAll вернёт пустой массив.
+//   2) ТОЛЬКО В РЕДАКТОРЕ (#if UNITY_EDITOR): стриминг day*.mp3/.wav и
+//      night*.mp3/.wav из Assets/Audio. В билде этой папки нет, а путь
+//      проекта может содержать кириллицу/пробелы — URI экранируется
+//      посегментно, весь загруз в try/catch с одним LogWarning на сессию.
+// Берём по одному случайному треку на сторону суток и кроссфейдим (3–5 с)
+// по TimeOfDayChanged. Луп — AudioSource.loop; для идеального шва лучше WAV
+// (у mp3 кодировочный зазор на стыке петли).
+// Файлов нет вообще — один Debug.Log на старте и дальше тишина, без спама.
 public class MusicManager : MonoBehaviour
 {
     public static MusicManager Instance { get; private set; }
@@ -25,6 +32,13 @@ public class MusicManager : MonoBehaviour
     AudioSource daySource, nightSource;
     bool isNight;
     float dayTarget, nightTarget;
+    // Кэш целевых громкостей: TimeOfDayChanged может идти чуть ли не каждый
+    // кадр — без изменений целей ApplyTargets выходит сразу.
+    float cachedDayTarget = -1f, cachedNightTarget = -1f;
+
+    // Дедупе синглтона: дубль (повторный вход в Play и т.п.) не строит
+    // источники и НЕ подписывается на события.
+    bool isMain;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AutoCreate()
@@ -37,10 +51,13 @@ public class MusicManager : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
+            // Дубль: просто умираем. Подписок и источников у него нет —
+            // OnEnable/OnDisable их благодаря isMain тоже не тронут.
             Destroy(gameObject);
             return;
         }
         Instance = this;
+        isMain = true;
         DontDestroyOnLoad(gameObject);
 
         daySource = gameObject.AddComponent<AudioSource>();
@@ -59,8 +76,8 @@ public class MusicManager : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
-    void OnEnable() => GameEvents.TimeOfDayChanged += OnTimeOfDayChanged;
-    void OnDisable() => GameEvents.TimeOfDayChanged -= OnTimeOfDayChanged;
+    void OnEnable() { if (isMain) GameEvents.TimeOfDayChanged += OnTimeOfDayChanged; }
+    void OnDisable() { if (isMain) GameEvents.TimeOfDayChanged -= OnTimeOfDayChanged; }
 
     void OnTimeOfDayChanged(float t, bool night)
     {
@@ -70,26 +87,70 @@ public class MusicManager : MonoBehaviour
 
     IEnumerator Start()
     {
-        string dir = Path.Combine(Application.dataPath, "Audio");
-        string dayPath = PickRandom(dir, "day");
-        string nightPath = PickRandom(dir, "night");
-        if (dayPath == null && nightPath == null)
+        // 1) Билд-безопасный путь: клипы в Resources/Music, имена day*/night*
+        //    (регистр не важен). Папки может не быть — это ок.
+        var days = new List<AudioClip>();
+        var nights = new List<AudioClip>();
+        foreach (var c in Resources.LoadAll<AudioClip>("Music"))
         {
-            Debug.Log("MusicManager: музыка не найдена в Assets/Audio " +
-                      "(нужны day*.mp3/.wav, night*.mp3/.wav) — играем молча");
+            if (c == null) continue;
+            if (c.name.StartsWith("day", StringComparison.OrdinalIgnoreCase)) days.Add(c);
+            else if (c.name.StartsWith("night", StringComparison.OrdinalIgnoreCase)) nights.Add(c);
+        }
+        dayClip = PickRandom(days);
+        nightClip = PickRandom(nights);
+
+#if UNITY_EDITOR
+        // 2) Редакторный фолбэк: постримить недостающие стороны из
+        //    Assets/Audio. В билде этого кода нет.
+        if (dayClip == null || nightClip == null)
+        {
+            string dayPath = null, nightPath = null;
+            try
+            {
+                string dir = Path.Combine(Application.dataPath, "Audio");
+                if (dayClip == null) dayPath = PickRandomPath(dir, "day");
+                if (nightClip == null) nightPath = PickRandomPath(dir, "night");
+            }
+            catch (Exception e)
+            {
+                WarnDiskOnce("не прочитался Assets/Audio: " + e.Message);
+            }
+            if (dayPath != null) yield return LoadClip(dayPath, c => dayClip = c);
+            if (nightPath != null) yield return LoadClip(nightPath, c => nightClip = c);
+        }
+#endif
+
+        if (dayClip == null && nightClip == null)
+        {
+            Debug.Log("MusicManager: музыка не найдена (ни в Resources/Music, " +
+#if UNITY_EDITOR
+                      "ни в Assets/Audio; " +
+#endif
+                      "нужны day*.mp3/.wav, night*.mp3/.wav) — играем молча");
             yield break;
         }
-
-        yield return LoadClip(dayPath, c => dayClip = c);
-        yield return LoadClip(nightPath, c => nightClip = c);
 
         if (dayClip != null) daySource.clip = dayClip;
         if (nightClip != null) nightSource.clip = nightClip;
         ApplyTargets(true); // встать на актуальную сторону суток без фейда
     }
 
+    static AudioClip PickRandom(List<AudioClip> list)
+        => list.Count == 0 ? null : list[UnityEngine.Random.Range(0, list.Count)];
+
+#if UNITY_EDITOR
+    static bool diskWarned; // предупреждение о дисковой загрузке — раз за сессию
+
+    static void WarnDiskOnce(string what)
+    {
+        if (diskWarned) return;
+        diskWarned = true;
+        Debug.LogWarning("MusicManager: " + what);
+    }
+
     // Первый попавшийся случайный файл prefix*.mp3/.wav; null — если нет.
-    static string PickRandom(string dir, string prefix)
+    static string PickRandomPath(string dir, string prefix)
     {
         if (!Directory.Exists(dir)) return null;
         var list = new List<string>();
@@ -100,20 +161,47 @@ public class MusicManager : MonoBehaviour
 
     static IEnumerator LoadClip(string path, Action<AudioClip> done)
     {
-        if (path == null) { done(null); yield break; }
         var type = path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
             ? AudioType.MPEG : AudioType.WAV;
-        using var req = UnityWebRequestMultimedia.GetAudioClip(new Uri(path).AbsoluteUri, type);
-        yield return req.SendWebRequest();
-        if (req.result == UnityWebRequest.Result.Success)
-            done(DownloadHandlerAudioClip.GetContent(req));
-        else
+        UnityWebRequest req;
+        try
         {
-            Debug.LogWarning("MusicManager: не прочитался " +
-                             Path.GetFileName(path) + ": " + req.error);
+            // Путь проекта бывает с пробелами/кириллицей — URI собираем
+            // явно, с экранированием каждого сегмента.
+            req = UnityWebRequestMultimedia.GetAudioClip(ToFileUri(path), type);
+        }
+        catch (Exception e)
+        {
+            WarnDiskOnce(Path.GetFileName(path) + ": " + e.Message);
             done(null);
+            yield break;
+        }
+        using (req)
+        {
+            yield return req.SendWebRequest();
+            if (req.result == UnityWebRequest.Result.Success)
+                done(DownloadHandlerAudioClip.GetContent(req));
+            else
+            {
+                WarnDiskOnce("не прочитался " + Path.GetFileName(path) + ": " + req.error);
+                done(null);
+            }
         }
     }
+
+    // file:/// URI из локального пути: пробелы и кириллица экранируются
+    // посегментно (EscapeDataString), двоеточие буквы диска не трогаем.
+    static string ToFileUri(string path)
+    {
+        var parts = path.Replace('\\', '/').Split('/');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (i == 0 && parts[i].Length == 2 && parts[i][1] == ':') continue; // "E:"
+            parts[i] = Uri.EscapeDataString(parts[i]);
+        }
+        return new Uri("file:///" + string.Join("/", parts)).AbsoluteUri;
+    }
+#endif
 
     // Целевые громкости: активна сторона текущего времени суток;
     // если её трека нет — продолжает играть другая сторона.
@@ -122,8 +210,14 @@ public class MusicManager : MonoBehaviour
         AudioSource want = isNight
             ? (nightSource.clip != null ? nightSource : daySource)
             : (daySource.clip != null ? daySource : nightSource);
-        dayTarget = want == daySource && daySource.clip != null ? musicVolume : 0f;
-        nightTarget = want == nightSource && nightSource.clip != null ? musicVolume : 0f;
+        float d = want == daySource && daySource.clip != null ? musicVolume : 0f;
+        float n = want == nightSource && nightSource.clip != null ? musicVolume : 0f;
+        // Дешёвый кэш: цели не изменились — источники не трогаем.
+        if (!instant && d == cachedDayTarget && n == cachedNightTarget) return;
+        cachedDayTarget = d;
+        cachedNightTarget = n;
+        dayTarget = d;
+        nightTarget = n;
         if (instant)
         {
             daySource.volume = dayTarget;

@@ -50,24 +50,36 @@ public class ZombieSpawner : MonoBehaviour
             if (TryFindSpawn(player.transform.position, out var pos))
                 SpawnZombie(pos);
             else
-                Debug.Log("[ZombieSpawner] чистой точки за 8 попыток не нашлось — зомби пропущен");
+                Debug.Log("[ZombieSpawner] чистой точки за 16 попыток не нашлось — зомби пропущен");
         }
         GameEvents.RaiseNotify("Из тумана доносится чавканье…");
     }
 
-    // До 8 попыток: случайный угол + радиус в кольце, клэмп к карте.
-    // Бракуем точки: ближе minDist к игроку ПОСЛЕ клэмпа (у края карты
-    // клэмп притягивает), в озере/на отмели, в пересечении с деревом/камнем.
+    // До 16 попыток: случайный угол + радиус в кольце вокруг игрока.
+    // Клэмп к квадрату ±95 заменён браком точки: мир — круглый остров,
+    // за кромкой (IslandRadius) океан протухшего майонеза. Бракуем также
+    // отмель/дно (HeightAt ниже SeaLevel+0.3) и явное море (IsInOcean);
+    // озеро и пересечение с деревом/камнем — как раньше.
     bool TryFindSpawn(Vector3 pp, out Vector3 pos)
     {
-        for (int attempt = 0; attempt < 8; attempt++)
+        for (int attempt = 0; attempt < 16; attempt++)
         {
             float ang = Random.value * Mathf.PI * 2f;
             float r = Random.Range(minDist, maxDist);
-            float x = Mathf.Clamp(pp.x + Mathf.Cos(ang) * r, -95f, 95f);
-            float z = Mathf.Clamp(pp.z + Mathf.Sin(ang) * r, -95f, 95f);
+            float x = pp.x + Mathf.Cos(ang) * r;
+            float z = pp.z + Mathf.Sin(ang) * r;
 
-            // фактическая дистанция после клэмпа
+            // за кромкой острова спавнить бессмысленно — зомби не плавает
+            if (new Vector2(x, z).magnitude > TerrainGen.IslandRadius - 10f)
+                continue;
+            float h = TerrainGen.HeightAt(x, z);
+            // не на отмели и не в океане: точка обязана быть сушей
+            if (h < TerrainGen.SeaLevel + 0.3f)
+                continue;
+            if (TerrainGen.IsInOcean(new Vector3(x, h + 1f, z)))
+                continue;
+            // фактическая дистанция до игрока (радиус берётся не меньше
+            // minDist — проверка страхует на случай возврата клэмпа)
             if (Vector2.Distance(new Vector2(x, z), new Vector2(pp.x, pp.z)) < minDist)
                 continue;
             // не в озере и не на отмели у воды
@@ -75,7 +87,7 @@ public class ZombieSpawner : MonoBehaviour
                 < TerrainGen.LakeRadius + 2f)
                 continue;
 
-            pos = new Vector3(x, TerrainGen.HeightAt(x, z) + 1f, z);
+            pos = new Vector3(x, h + 1f, z);
             // тело зомби не должно пересекать ствол/камень/бокс озера
             if (Physics.CheckCapsule(pos + Vector3.up * 0.5f, pos + Vector3.up * 1.6f,
                     0.35f, ~0, QueryTriggerInteraction.Ignore))

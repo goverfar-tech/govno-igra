@@ -231,6 +231,14 @@ public class SaveSystem : MonoBehaviour
         // SetState сам сбрасывает IsDead и шлёт StatsChanged — загрузка = оживление.
         // Майонез клампим минимум 1: мусорный ноль не должен убивать в момент загрузки.
         player.Teleport(data.playerPos);
+        // Старые сейвы с квадратной карты 200×200 могли лечь в новый океан:
+        // загрузка в протухший майонез — смерть до первого кадра. Выносим
+        // ведро на плато спауна (формат сейва не меняется).
+        if (TerrainGen.IsInOcean(player.transform.position))
+        {
+            player.Teleport(new Vector3(0f, TerrainGen.HeightAt(0f, 0f) + 1.1f, 0f));
+            GameEvents.RaiseNotify("Сейв был в океане — ведро вынесло на берег.");
+        }
         player.ApplyView(data.yaw, data.pitch);
         player.Stats.SetState(Mathf.Max(1f, data.mayo), data.poison);
 

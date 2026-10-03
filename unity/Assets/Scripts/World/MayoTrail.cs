@@ -110,6 +110,7 @@ public class MayoTrail : MonoBehaviour
         Vector3 flatVel = cc.velocity; flatVel.y = 0f;
         if (flatVel.magnitude < 0.3f) return;                    // стоим — не течём (почти)
         if (Vector3.Distance(player.transform.position, lastDropPos) < stepDistance) return;
+        if (TerrainGen.IsInOcean(player.transform.position)) return; // в океане всё и так в майонезе — след не капает
 
         // Публичного IsCrouching у Player нет — выводим присед по высоте
         // капсулы (порог — середина между стоя/сидя). Присед ВАЖНЕЕ

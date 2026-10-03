@@ -5,11 +5,13 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 
 // Один раз собирает и сохраняет сцену Assets/Scenes/Main.unity:
-// земля, солнце с DayNight, игрок (капсула + Player/Inventory/Stats,
-// Head с камерой), DebugHud, деревья и камни как ResourceNode (базово 50/18
-// шт, масштабируются от TerrainGen.Size — см. блок рассеивания),
-// силуэты-«сторожа» по краю карты и две пасхалки §9.7 (Monument_Bucket,
-// MayoMonolith) как чистый визуал. ItemData-ассеты (древесина/камень/плоть/
+// круглый остров 64 чанками в океане протухшего майонеза, солнце с
+// DayNight, игрок (капсула + Player/Inventory/Stats, Head с камерой),
+// DebugHud, деревья и камни как ResourceNode (базово 50/18 шт,
+// масштабируются от TerrainGen.Size — см. блок рассеивания), городок
+// «Гнилой Причал» с причалом и заброшенностями, силуэты-«сторожа»
+// кольцом на суше и две пасхалки §9.7 (Monument_Bucket, MayoMonolith)
+// как чистый визуал. ItemData-ассеты (древесина/камень/плоть/
 // фляги/яйцо/майонез; ягоды и их кусты убраны автором 2026-10-03,
 // ассет berry.asset остаётся в Resources как балласт — удалить руками
 // при желании).
@@ -38,20 +40,55 @@ public static class SetupMainScene
         var oldCam = GameObject.Find("Main Camera");
         if (oldCam != null) Object.DestroyImmediate(oldCam);
 
-        // --- террейн: рельеф по шуму вместо плоскости (M4) ---
+        // --- террейн: остров строится 64 чанками вместо одного меша ---
+        // Карта выросла до 1000×1000: единый меш с ячейкой ~1.5 м не влезает
+        // в лимит вершин, поэтому сетка 8×8 по 125 м. Ассеты чанков кэшируются
+        // так же, как раньше кэшировался TerrainMesh.asset.
         EnsureFolder("Assets/Terrain");
-        string terrainPath = "Assets/Terrain/TerrainMesh.asset";
-        var terrainMesh = AssetDatabase.LoadAssetAtPath<Mesh>(terrainPath);
-        bool isNewMesh = terrainMesh == null;
-        if (isNewMesh) terrainMesh = new Mesh { name = "Terrain" };
-        TerrainGen.FillMesh(terrainMesh, 130); // ~1.5 м на ячейку — капсула не «проваливается»
-        if (isNewMesh) AssetDatabase.CreateAsset(terrainMesh, terrainPath);
-        else EditorUtility.SetDirty(terrainMesh);
-        var ground = new GameObject("Terrain");
-        ground.AddComponent<MeshFilter>().sharedMesh = terrainMesh;
-        ground.AddComponent<MeshRenderer>().sharedMaterial =
-            CreateMaterial("Ground", new Color(0.35f, 0.5f, 0.25f));
-        ground.AddComponent<MeshCollider>().sharedMesh = terrainMesh;
+        var terrainRoot = new GameObject("Terrain");
+        const int chunkRes = 84; // ~1.5 м на ячейку — капсула не «проваливается»
+        float chunkSize = TerrainGen.Size / TerrainGen.ChunkCount;
+        for (int cz = 0; cz < TerrainGen.ChunkCount; cz++)
+        for (int cx = 0; cx < TerrainGen.ChunkCount; cx++)
+        {
+            string chunkPath = $"Assets/Terrain/Terrain_c{cx}_c{cz}.asset";
+            var chunkMesh = AssetDatabase.LoadAssetAtPath<Mesh>(chunkPath);
+            bool isNewChunk = chunkMesh == null;
+            if (isNewChunk) chunkMesh = new Mesh { name = "Terrain_c" + cx + "_c" + cz };
+            TerrainGen.FillChunk(chunkMesh, cx, cz, chunkRes);
+            if (isNewChunk) AssetDatabase.CreateAsset(chunkMesh, chunkPath);
+            else EditorUtility.SetDirty(chunkMesh);
+
+            var chunkGo = new GameObject("Terrain_" + cx + "_" + cz);
+            chunkGo.transform.SetParent(terrainRoot.transform, false);
+            chunkGo.transform.position = new Vector3(
+                -TerrainGen.Size / 2f + (cx + 0.5f) * chunkSize, 0f,
+                -TerrainGen.Size / 2f + (cz + 0.5f) * chunkSize);
+            chunkGo.AddComponent<MeshFilter>().sharedMesh = chunkMesh;
+            chunkGo.AddComponent<MeshRenderer>().sharedMaterial =
+                CreateMaterial("Ground", new Color(0.35f, 0.5f, 0.25f));
+            chunkGo.AddComponent<MeshCollider>().sharedMesh = chunkMesh;
+        }
+
+        // --- океан протухшего майонеза: диск на уровне моря ---
+        // Радиус 707.1 м покрывает квадрат 1000×1000 до самых углов. Никаких
+        // невидимых стенок — упасть в океан можно, выплыть нельзя (смерть
+        // в Player.cs). Коллайдер у поверхности убран, как у лужи.
+        var seaRoot = new GameObject("MayoSea");
+        var seaSurface = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        seaSurface.name = "Surface";
+        seaSurface.transform.SetParent(seaRoot.transform, false);
+        seaSurface.transform.localScale = new Vector3(1414.2f, 0.02f, 1414.2f);
+        // верх диска на сантиметр НИЖЕ уровня моря: плато спауна стоит ровно
+        // на 0 (SeaLevel), копланарные поверхности мерцали бы z-fighting'ом
+        seaSurface.transform.localPosition = new Vector3(0f, -0.03f, 0f);
+        var seaCol = seaSurface.GetComponent<CapsuleCollider>();
+        if (seaCol != null) Object.DestroyImmediate(seaCol);
+        // свой материал: лужа (Mayo.mat) и океан должны отличаться
+        var seaMat = CreateMaterial("MayoSea", new Color(0.64f, 0.58f, 0.28f));
+        seaMat.SetFloat("_Glossiness", 0.5f); // глянец мёртвой воды; ассет
+                                              // перезаписывается Setup'ом — ок
+        seaSurface.GetComponent<MeshRenderer>().sharedMaterial = seaMat;
 
         // --- солнце + день/ночь ---
         // Ищем ЛЮБОЙ включённый directional-свет (имя «Directional Light»
@@ -258,9 +295,9 @@ public static class SetupMainScene
         var rng = new System.Random(1337);
         float sizeScale = TerrainGen.Size / 200f;
         // радиусы кольца рассеивания: 0.07*Size..0.45*Size (14..90 м при 200),
-        // внешний — гарантированно не дальше края карты
+        // внешний прижат к IslandRadius-40 — лес не стоит на отмели и в воде
         float scatterMinR = 0.07f * TerrainGen.Size;
-        float scatterMaxR = Mathf.Min(0.45f * TerrainGen.Size, TerrainGen.Size / 2f - 2f);
+        float scatterMaxR = Mathf.Min(0.45f * TerrainGen.Size, TerrainGen.IslandRadius - 40f);
 
         // деревья (все добываемые; количество ∝ площади карты)
         int treeTotal = Mathf.Max(50, Mathf.RoundToInt(50 * sizeScale * sizeScale));
@@ -303,16 +340,18 @@ public static class SetupMainScene
         // → в missing-отчёте для них строк тоже не держим.
 
         // --- силуэты по периметру: край карты не должен быть пустым ---
-        // Кольцо 0.44*Size..0.48*Size от центра (88–96 м при Size=200, карта
-        // ±Size/2, край не задеваем): редкие крупные камни и мёртвые деревья.
-        // Это АТМОСФЕРА, не забор: коллайдер ставим только большим камням,
-        // деревья-силуэты — декор.
+        // Кольцо 0.34*Size..0.41*Size (340–410 м при 1000): суша и дюны
+        // перед отмелью (IslandRadius=420). Старые 0.44–0.48*Size после
+        // ввода океана оказались в майонезе — силуэты стояли бы по колено
+        // в воде. Редкие крупные камни и мёртвые деревья. Это АТМОСФЕРА,
+        // не забор: коллайдер ставим только большим камням, деревья-силуэты
+        // — декор.
         string[] edgeRocks = { "rock-sand-a", "rock-sand-b", "rock-sand-c" };
         string[] edgeDeadTrees = { "tree-trunk", "tree-autumn-trunk", "tree-autumn-tall" };
         // кольцо, а не площадь → количество масштабируется линейно, не квадратично
         int edgeTotal = Mathf.Max(14, Mathf.RoundToInt(14 * sizeScale));
-        float edgeMinR = 0.44f * TerrainGen.Size;
-        float edgeMaxR = Mathf.Min(0.48f * TerrainGen.Size, TerrainGen.Size / 2f - 2f);
+        float edgeMinR = 0.34f * TerrainGen.Size;
+        float edgeMaxR = 0.41f * TerrainGen.Size;
         int edgeSkipped = 0;
         for (int i = 0; i < edgeTotal; i++)
         {
@@ -343,16 +382,21 @@ public static class SetupMainScene
 
         // --- пасхалки §9.7: чисто визуальные пропсы, без интерактива ---
         // (а) «Памятник ведру» — большое ведро в честь Прародителя Майонеза.
-        //     Стоит в 20–60 м от спауна (озеро исключает RandomPos само).
-        var monument = SpawnModel("bucket", RandomPos(rng, 20f, 60f), "Monument_Bucket", 3f);
+        //     Стоит в 60–180 м от спауна (озеро исключает RandomPos само).
+        var monument = SpawnModel("bucket", RandomPos(rng, 60f, 180f), "Monument_Bucket", 6f);
         if (monument == null)
             missing.AppendLine("easter egg: Monument_Bucket (bucket.glb)");
         else
             monument.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
 
-        // (б) «Майолит» — гигантская банка сырого майонеза у самого края
-        //     карты. Видна издалека, как дурной знак над горизонтом.
-        var monolith = SpawnModel("bottle-large", RandomPos(rng, 85f, 95f), "MayoMonolith", 10f);
+        // (б) «Майолит» — маяк-знамение посреди протухшего майонеза.
+        //     Не RandomPos: азимут жёстко противоположен городу, радиус
+        //     IslandRadius+130 — стоит в океане, виден с берега как дурной
+        //     знак над горизонтом.
+        Vector2 monoDir = -TerrainGen.TownCenter.normalized; // от города прочь
+        float monoR = TerrainGen.IslandRadius + 130f;
+        var monolith = SpawnModel("bottle-large",
+            new Vector3(monoDir.x * monoR, 2f, monoDir.y * monoR), "MayoMonolith", 16f);
         if (monolith == null)
             missing.AppendLine("easter egg: MayoMonolith (bottle-large.glb)");
         else
@@ -393,8 +437,318 @@ public static class SetupMainScene
         waterSource.emptyFlask = flaskEmpty;
         waterSource.fullFlask = flask;
 
+        // --- городок «Гнилой Причал» (S/мир 2026-10) ---
+        // Терраса под городом плоская (TerrainGen.TownHeight), всё ставится
+        // OnGround без ручного подъёма. Чистый декор без интерактива:
+        // лут-руины — отдельный этап.
+        Vector2 townC = TerrainGen.TownCenter;
+        float townR = townC.magnitude;
+        Vector2 pierDir = townC.normalized; // от центра острова наружу — туда причал
 
+        // прогрев кусков городка: LoadModel синхронно реимпортирует GLB,
+        // на 60+ кусков дешевле один проход. Тип без ассета пишет одну
+        // строку в missing, и составные блоки с ним пропускаются целиком.
+        string[] townPieces = {
+            "structure-floor", "tree-trunk", "structure-metal-wall", "structure-metal-doorway",
+            "structure-metal-roof", "bedroll", "signpost", "barrel", "barrel-open",
+            "box-large", "box-large-open", "chest", "campfire-pit",
+            "fence", "fence-fortified", "fence-doorway", "tent", "tent-canvas", "tent-canvas-half"
+        };
+        var townPrefab = new Dictionary<string, GameObject>();
+        foreach (var piece in townPieces)
+        {
+            var loaded = LoadModel(piece);
+            if (loaded == null) missing.AppendLine("town: " + piece + ".glb");
+            else townPrefab[piece] = loaded;
+        }
 
+        // причал: два ряда секций-настила шагом 2 м от кромки городка наружу,
+        // до IslandRadius+10 — конец настила висит над открытой водой.
+        // Настил НЕ следует дну: над водой держится на уровне моря +0.4.
+        // Секции приплюснуты по Y: у structure-floor в GLB полметра «ног»,
+        // настил должен быть доской.
+        if (townPrefab.ContainsKey("structure-floor"))
+        {
+            Vector2 perp = new Vector2(-pierDir.y, pierDir.x);
+            const float pierUp = 0.4f;     // над землёй/водой
+            const float secScale = 3f;     // секция 0.75 -> 2.25 м
+            const float secY = 0.3f;       // толщина настила ~0.16 м
+            int secI = 0;
+            for (float d = townR + 10f; d <= TerrainGen.IslandRadius + 10f + 0.01f; d += 2f)
+            {
+                secI++;
+                Vector2 mid = townC + pierDir * d;
+                for (int row = 0; row < 2; row++)
+                {
+                    Vector2 p = mid + perp * (row * 1.2f - 0.6f);
+                    float deckY = Mathf.Max(TerrainGen.HeightAt(p.x, p.y) + pierUp,
+                                            TerrainGen.SeaLevel + pierUp);
+                    var sec = SpawnTownPiece(townPrefab, "structure-floor",
+                        new Vector3(p.x, deckY, p.y),
+                        "Pier_Section_" + secI + (row == 0 ? "" : "b"));
+                    if (sec != null)
+                        sec.transform.GetChild(0).localScale = new Vector3(secScale, secY, secScale);
+                }
+            }
+
+            // опоры: стволы от y=-1 до настила, под каждую третью секцию
+            if (townPrefab.ContainsKey("tree-trunk"))
+            {
+                const float trunkH = 0.261f; // высота ствола в GLB
+                int postI = 0;
+                for (float d = townR + 12f; d <= TerrainGen.IslandRadius + 10f; d += 6f)
+                {
+                    Vector2 p = townC + pierDir * d;
+                    float deckY = Mathf.Max(TerrainGen.HeightAt(p.x, p.y) + pierUp,
+                                            TerrainGen.SeaLevel + pierUp);
+                    var post = SpawnTownPiece(townPrefab, "tree-trunk",
+                        new Vector3(p.x, -1f, p.y), "Pier_Post_" + (++postI));
+                    if (post != null)
+                        post.transform.GetChild(0).localScale =
+                            new Vector3(2.2f, (deckY + 1f) / trunkH, 2.2f); // 0.44 м толщиной
+                }
+            }
+        }
+
+        // лачуги: 4 стены-панели вокруг квадрата 3.2 м, вход (+Z, дверной
+        // проём) смотрит на площадь. Стена GLB 0.535×0.5 → масштаб 6 даёт
+        // 3.2×3.0 м. Панель в GLB лежит на РЕБРЕ тайла (сдвиг 0.224 от
+        // центра), иначе стены съезжают внутрь квадрата.
+        if (townPrefab.ContainsKey("structure-metal-wall")
+            && townPrefab.ContainsKey("structure-metal-doorway"))
+        {
+            const float wallScale = 6f;
+            const float half = 1.6f;
+            const float edge = half + 0.224f * wallScale;
+            float wallH = 0.5f * wallScale; // верх стен — сюда кладём крышу
+            int shackTotal = 7;
+            for (int i = 0; i < shackTotal; i++)
+            {
+                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+                float rr = Mathf.Lerp(12f, 28f, (float)rng.NextDouble());
+                Vector2 sp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rr;
+                var shack = new GameObject("Shack_" + i);
+                shack.transform.position = OnGround(sp.x, sp.y);
+                shack.transform.rotation = Quaternion.Euler(0f,
+                    Mathf.Atan2(townC.x - sp.x, townC.y - sp.y) * Mathf.Rad2Deg
+                    + ((float)rng.NextDouble() - 0.5f) * 40f, 0f);
+
+                bool noRoof = i % 2 == 1;              // каждая вторая — без крыши
+                bool fallenWall = i > 0 && i % 3 == 0; // у части отвалилась стена
+
+                string[] sideNames = { "WallN", "WallE", "WallS", "WallW" };
+                Vector3[] sidePos = {
+                    new Vector3(0f, 0f, edge), new Vector3(edge, 0f, 0f),
+                    new Vector3(0f, 0f, -edge), new Vector3(-edge, 0f, 0f)
+                };
+                float[] sideYaw = { 0f, 90f, 180f, 270f };
+                for (int side = 0; side < 4; side++)
+                {
+                    var piece = SpawnTownPiece(townPrefab,
+                        side == 0 ? "structure-metal-doorway" : "structure-metal-wall",
+                        Vector3.zero, "Shack_" + i + "_" + sideNames[side], wallScale);
+                    if (piece == null) continue;
+                    piece.transform.SetParent(shack.transform, false);
+                    if (fallenWall && side == 2)
+                    {
+                        // задняя стена повернута на 20-40° и отвалила от дома
+                        piece.transform.localRotation = Quaternion.Euler(0f,
+                            sideYaw[side] + 20f + (float)rng.NextDouble() * 20f,
+                            (float)rng.NextDouble() * 15f);
+                        piece.transform.localPosition = sidePos[side] * 1.45f;
+                    }
+                    else
+                    {
+                        piece.transform.localRotation = Quaternion.Euler(0f, sideYaw[side], 0f);
+                        piece.transform.localPosition = sidePos[side];
+                    }
+                }
+
+                if (!noRoof && townPrefab.ContainsKey("structure-metal-roof"))
+                {
+                    var roof = SpawnTownPiece(townPrefab, "structure-metal-roof",
+                        Vector3.zero, "Shack_" + i + "_Roof");
+                    if (roof != null)
+                    {
+                        roof.transform.SetParent(shack.transform, false);
+                        // 6 по пятну (3.3 м, со свесом), 2.2 по высоте конька
+                        roof.transform.GetChild(0).localScale = new Vector3(6f, 2.2f, 6f);
+                        roof.transform.localPosition = new Vector3(0f, wallH, 0f);
+                    }
+                }
+
+                if (townPrefab.ContainsKey("bedroll") && (i == 0 || i == 4))
+                    SpawnTownPiece(townPrefab, "bedroll",
+                        OnGround(sp.x, sp.y, 0.02f), "Shack_" + i + "_Bedroll", 3f);
+            }
+        }
+
+        // площадь: знак, тара, сундук, холодный очаг. SpawnTownPiece не
+        // вешает Campfire — очаг просто декор, живой ставится игроком.
+        // Масштабы 2.5–3.5 вместо «1» из спеки: GLB-куски 0.2–0.5 юнита,
+        // при масштабе 1 бочка вышла бы 34 см ростом.
+        SpawnTownPiece(townPrefab, "signpost", OnGround(townC.x, townC.y), "Town_Signpost", 6f);
+        string[] barrelRow = { "barrel", "barrel-open", "barrel" };
+        for (int i = 0; i < 3; i++)
+        {
+            float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+            float rr = 2.5f + (float)rng.NextDouble() * 3.5f;
+            Vector2 bp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rr;
+            var barrelGo = SpawnTownPiece(townPrefab, barrelRow[i],
+                OnGround(bp.x, bp.y), "Town_Barrel_" + i, 2.5f);
+            if (barrelGo != null)
+                barrelGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        }
+        Vector2 boxPos = townC + new Vector2(3.5f, 2f);
+        var boxGo = SpawnTownPiece(townPrefab, rng.Next(0, 2) == 0 ? "box-large-open" : "box-large",
+            OnGround(boxPos.x, boxPos.y), "Town_Box", 2.5f);
+        if (boxGo != null)
+            boxGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        Vector2 chestPos = townC + new Vector2(-3f, -2.5f);
+        var chestGo = SpawnTownPiece(townPrefab, "chest",
+            OnGround(chestPos.x, chestPos.y), "Town_Chest", 2.5f);
+        if (chestGo != null)
+            chestGo.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+        Vector2 pitPos = townC + new Vector2(1.5f, -4f);
+        SpawnTownPiece(townPrefab, "campfire-pit", OnGround(pitPos.x, pitPos.y), "Town_Firepit", 3.5f);
+
+        // забор по кольцу 34 м: два пролёта выбито (второй — случайный),
+        // у выхода на причал — дверной проём. Секции со случайным yaw:
+        // забор брошен, никто его не поправлял.
+        if (townPrefab.ContainsKey("fence") || townPrefab.ContainsKey("fence-fortified"))
+        {
+            const int fenceTotal = 12;
+            const float fenceR = 34f;
+            const float fenceScale = 4f; // секция 0.5 -> 2.0 м
+            float pierAng = Mathf.Atan2(pierDir.y, pierDir.x);
+            float gapAng = (float)rng.NextDouble() * Mathf.PI * 2f;
+            for (int i = 0; i < fenceTotal; i++)
+            {
+                float ang = i / (float)fenceTotal * Mathf.PI * 2f;
+                if (Mathf.Abs(Mathf.DeltaAngle(ang, pierAng)) < 0.24f) continue; // проём на причал
+                if (Mathf.Abs(Mathf.DeltaAngle(ang, gapAng)) < 0.3f) continue;   // разрушенный пролёт
+                Vector2 fp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * fenceR;
+                var f = SpawnTownPiece(townPrefab, rng.Next(0, 2) == 0 ? "fence" : "fence-fortified",
+                    OnGround(fp.x, fp.y), "Town_Fence_" + i, fenceScale);
+                if (f != null)
+                    f.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+            }
+            Vector2 dp = townC + pierDir * fenceR;
+            var fenceDoor = SpawnTownPiece(townPrefab, "fence-doorway",
+                OnGround(dp.x, dp.y), "Town_Fence_Door", fenceScale);
+            if (fenceDoor != null)
+                fenceDoor.transform.rotation = Quaternion.Euler(0f,
+                    Mathf.Atan2(pierDir.x, pierDir.y) * Mathf.Rad2Deg, 0f); // створка вдоль пути
+        }
+
+        // палатки-руины на краю городка: брошенный лагерь, полотнища
+        // покосились (наклон Z ±10°)
+        string[] tentRow = { "tent", "tent-canvas", "tent-canvas-half" };
+        for (int i = 0; i < tentRow.Length; i++)
+        {
+            float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+            float rr = 29f + (float)rng.NextDouble() * 4f; // между лачугами и забором
+            Vector2 tp = townC + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rr;
+            var tent = SpawnTownPiece(townPrefab, tentRow[i],
+                OnGround(tp.x, tp.y), "Town_Tent_" + i, 5.5f);
+            if (tent != null)
+                tent.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f,
+                    ((float)rng.NextDouble() - 0.5f) * 20f);
+        }
+
+        // --- заброшенности по острову: обломки лагерей ---
+        // Кольцо 0.25–0.40*Size. Точка бракуется, если в океане или ниже
+        // уровня воды; до 24 попыток, не нашли сушу — руина пропускается.
+        // Декор без интерактива (лут-руины — этап X).
+        string[] ruinPieces = { "box-open", "signpost-single", "resource-planks" };
+        foreach (var piece in ruinPieces)
+            if (LoadModel(piece) == null) missing.AppendLine("ruins: " + piece + ".glb");
+        int ruinsTotal = 6;
+        for (int i = 0; i < ruinsTotal; i++)
+        {
+            Vector2 rp = Vector2.zero;
+            bool found = false;
+            for (int attempt = 0; attempt < 24; attempt++)
+            {
+                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+                float rr = Mathf.Lerp(0.25f * TerrainGen.Size, 0.40f * TerrainGen.Size,
+                    (float)rng.NextDouble());
+                float x = Mathf.Cos(ang) * rr, z = Mathf.Sin(ang) * rr;
+                if (TerrainGen.IsInOcean(new Vector3(x, 1f, z))) continue;
+                if (TerrainGen.HeightAt(x, z) < TerrainGen.SeaLevel + 0.5f) continue;
+                rp = new Vector2(x, z);
+                found = true;
+                break;
+            }
+            if (!found) continue;
+
+            var ruin = new GameObject("Abandoned_" + i);
+            ruin.transform.position = OnGround(rp.x, rp.y);
+            int props = 2 + rng.Next(0, 3); // 2-4 предмета
+            for (int pi = 0; pi < props; pi++)
+            {
+                float ang2 = (float)rng.NextDouble() * Mathf.PI * 2f;
+                float off = 1f + (float)rng.NextDouble() * 3f;
+                float px = rp.x + Mathf.Cos(ang2) * off;
+                float pz = rp.y + Mathf.Sin(ang2) * off;
+                switch (rng.Next(0, 5))
+                {
+                    case 0: // перевёрнутый ящик: на боку или вверх дном
+                        var box = SpawnTownPiece(townPrefab, "box-open",
+                            OnGround(px, pz), "Abandoned_" + i + "_Box", 2.5f);
+                        if (box != null)
+                        {
+                            box.transform.SetParent(ruin.transform, true);
+                            box.transform.rotation = Quaternion.Euler(0f,
+                                (float)rng.NextDouble() * 360f, 90f + (float)rng.NextDouble() * 70f);
+                        }
+                        break;
+                    case 1:
+                        var bar = SpawnTownPiece(townPrefab, "barrel-open",
+                            OnGround(px, pz), "Abandoned_" + i + "_Barrel", 2.5f);
+                        if (bar != null)
+                        {
+                            bar.transform.SetParent(ruin.transform, true);
+                            bar.transform.rotation = Quaternion.Euler(0f,
+                                (float)rng.NextDouble() * 360f, 0f);
+                        }
+                        break;
+                    case 2:
+                        var sign = SpawnTownPiece(townPrefab, "signpost-single",
+                            OnGround(px, pz), "Abandoned_" + i + "_Sign", 4f);
+                        if (sign != null) sign.transform.SetParent(ruin.transform, true);
+                        break;
+                    case 3: // пара обломков стены под углами
+                        for (int wi = 0; wi < 2; wi++)
+                        {
+                            var deb = SpawnTownPiece(townPrefab, "structure-metal-wall",
+                                OnGround(px + wi * 1.2f, pz + wi * 0.4f),
+                                "Abandoned_" + i + "_Wall" + wi, 3f);
+                            if (deb != null)
+                            {
+                                deb.transform.SetParent(ruin.transform, true);
+                                deb.transform.rotation = Quaternion.Euler(0f,
+                                    (float)rng.NextDouble() * 360f, (float)rng.NextDouble() * 35f);
+                            }
+                        }
+                        break;
+                    default: // штабель досок
+                        for (int pl = 0; pl < 2; pl++)
+                        {
+                            var plk = SpawnTownPiece(townPrefab, "resource-planks",
+                                OnGround(px + pl * 0.4f, pz + pl * 0.2f),
+                                "Abandoned_" + i + "_Planks" + pl, 3f);
+                            if (plk != null)
+                            {
+                                plk.transform.SetParent(ruin.transform, true);
+                                plk.transform.rotation = Quaternion.Euler(0f,
+                                    (float)rng.NextDouble() * 360f, 0f);
+                            }
+                        }
+                        break;
+                }
+            }
+        }
 
         // --- зомби-спавнер (M5): 3 зомби каждую ночь кольцом вокруг игрока ---
         var spawnerGo = new GameObject("ZombieSpawner");
@@ -402,8 +756,10 @@ public static class SetupMainScene
         spawner.dropItem = meat; // с зомби падает сырая плоть
         spawner.pickupPrefab = pickupPrefabAsset;
 
-        // --- курица (§9.3): одна, вдали от спауна, яйца → домашний майонез ---
-        var chickenPos = RandomPos(rng, 60f, 85f);
+        // --- курица (§9.3): одна, далеко от спауна, яйца → домашний
+        // майонез. Остров вырос — прежние 60–85 м теперь почти центр,
+        // 200–380 м — глушь у пляжа ---
+        var chickenPos = RandomPos(rng, 200f, 380f);
         var chickenGo = new GameObject("Chicken");
         chickenGo.transform.position = chickenPos;
         var chickenCC = chickenGo.AddComponent<CharacterController>();
@@ -580,6 +936,22 @@ public static class SetupMainScene
         var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
         model.transform.SetParent(root.transform, false);
         model.transform.localScale = Vector3.one * scale; // Kenney-модели мелкие, масштабы — как в Godot-версии
+        return root;
+    }
+
+    // Кусок городка/руин из прогретого словаря (townPrefab в Run):
+    // LoadModel дёргается один раз на тип, а не на каждый экземпляр.
+    // null = GLB не нашёлся; строка в missing уже записана при прогреве,
+    // здесь молча пропускаем.
+    static GameObject SpawnTownPiece(Dictionary<string, GameObject> prefabs,
+        string glb, Vector3 pos, string goName, float scale = 1f)
+    {
+        if (!prefabs.TryGetValue(glb, out var prefab)) return null;
+        var root = new GameObject(goName);
+        root.transform.position = pos;
+        var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        model.transform.SetParent(root.transform, false);
+        model.transform.localScale = Vector3.one * scale;
         return root;
     }
 
@@ -861,12 +1233,17 @@ Shader ""Sky/SkyUnlit"" {
         // сериализуется в модификации ссылкой {fileID: 0} — рендерер
         // оставался без материала, и мясо было фиолетовым.
         var go = Object.Instantiate(src);
+        // Материал — ОТДЕЛЬНЫЙ АССЕТ: рантайм-материал при сохранении
+        // префаба терялся (в m_Materials оставался {fileID: 0}), и слот
+        // рендерил мадженту. Присваиваем массивом: у GLB-мешей несколько
+        // субмешей, любой пустой слот даёт фиолетовый.
+        var white = CreateMaterial("MeatMayo", new Color(0.96f, 0.96f, 0.90f));
+        white.SetFloat("_Glossiness", 0.25f);
         foreach (var r in go.GetComponentsInChildren<Renderer>())
         {
-            var m = new Material(Shader.Find("Standard"));
-            m.color = new Color(0.96f, 0.96f, 0.90f);
-            m.SetFloat("_Glossiness", 0.25f);
-            r.sharedMaterial = m;
+            var slots = new Material[r.sharedMaterials.Length];
+            for (int i = 0; i < slots.Length; i++) slots[i] = white;
+            r.sharedMaterials = slots;
         }
         EnsureFolder("Assets/Prefabs/Items");
         var path = $"Assets/Prefabs/Items/{assetName}.prefab";

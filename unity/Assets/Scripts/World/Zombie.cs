@@ -291,11 +291,21 @@ public class Zombie : MonoBehaviour
         if (repickTarget <= 0f || HorizontalDist(wanderTarget) < 1f)
         {
             repickTarget = 6f;
-            float ang = Random.value * Mathf.PI * 2f;
-            float r = Random.Range(4f, 10f);
-            var p = transform.position + new Vector3(Mathf.Cos(ang) * r, 0, Mathf.Sin(ang) * r);
-            p.y = TerrainGen.HeightAt(p.x, p.z) + 1f;
-            wanderTarget = p;
+            // Зомби не плавает: цель в океане протухшего майонеза или за
+            // кромкой острова бракуем; до 8 попыток, иначе бредём к прежней.
+            var goal = wanderTarget;
+            for (int attempt = 0; attempt < 8; attempt++)
+            {
+                float ang = Random.value * Mathf.PI * 2f;
+                float r = Random.Range(4f, 10f);
+                var p = transform.position + new Vector3(Mathf.Cos(ang) * r, 0, Mathf.Sin(ang) * r);
+                p.y = TerrainGen.HeightAt(p.x, p.z) + 1f;
+                if (new Vector2(p.x, p.z).magnitude > TerrainGen.IslandRadius - 4f) continue;
+                if (TerrainGen.IsInOcean(p)) continue;
+                goal = p;
+                break;
+            }
+            wanderTarget = goal;
             state = State.Wander;
         }
         MoveTowards(wanderTarget, walkSpeed);
@@ -314,6 +324,17 @@ public class Zombie : MonoBehaviour
         if (flat.sqrMagnitude < 0.05f) return;
         FaceTo(target);
         Vector3 step = flat.normalized * speed;
+        // Зомби не плавает — толпится у кромки острова: кандидат шага,
+        // уходящий за окружность IslandRadius-2, проецируем обратно на
+        // неё (y-часть шага — рельеф — не трогаем).
+        var nextXZ = new Vector2(transform.position.x + step.x, transform.position.z + step.z);
+        float edge = TerrainGen.IslandRadius - 2f;
+        if (nextXZ.magnitude > edge)
+        {
+            nextXZ = nextXZ.normalized * edge;
+            step.x = nextXZ.x - transform.position.x;
+            step.z = nextXZ.y - transform.position.z;
+        }
         // держимся на рельефе
         step.y = (TerrainGen.HeightAt(transform.position.x, transform.position.z) + 1f
                   - transform.position.y) * 5f;

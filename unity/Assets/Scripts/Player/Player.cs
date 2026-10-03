@@ -71,6 +71,14 @@ public class Player : MonoBehaviour
     public static bool hasCampfireSpawn;
     Vector3 spawnPos;
 
+    // Океан протухшего майонеза (§9): упасть можно, выплыть нельзя.
+    // seaTimer — сколько секунд ведро тонет; lastDryPos — последняя сухая
+    // точка (утонувший дроп инвентаря остаётся на берегу, а не на дне);
+    // seaToastShown — тост борьбы показывается один раз за купание.
+    float seaTimer;
+    Vector3 lastDryPos;
+    bool seaToastShown;
+
     // Статика точки респауна не должна переживать перезапуск сессии —
     // иначе без domain reload «последний костёр» протекал бы в новый мир.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -86,6 +94,7 @@ public class Player : MonoBehaviour
         Inventory = GetComponent<Inventory>();
         Stats = GetComponent<Stats>();
         spawnPos = transform.position;
+        lastDryPos = spawnPos; // спаун на плато — сухая точка по умолчанию
 
         // якорь «в руке»: правее-ниже центра экрана, чуть повёрнут внутрь.
         // Вид-модель ребёнок головы — наследует headbob автоматически.
@@ -283,6 +292,11 @@ public class Player : MonoBehaviour
     public void Respawn()
     {
         var inv = Inventory;
+        // Утонувший в океане дроп остаётся на берегу (§9.5 corpse run),
+        // а не на дне протухшего майонеза: центр раскладки — последняя
+        // сухая точка, если ведро упокоило в море.
+        Vector3 dropCenter = TerrainGen.IsInOcean(transform.position)
+            ? lastDryPos : transform.position;
         for (int i = 0; i < inv.slots.Count; i++)
         {
             var s = inv.slots[i];
@@ -291,7 +305,7 @@ public class Player : MonoBehaviour
             // точку; посадку на землю делает сам PickupItem
             float ang = i * 2.39996f;
             var drop = Instantiate(inv.pickupPrefab,
-                transform.position + new Vector3(Mathf.Cos(ang) * 0.8f, 0.5f, Mathf.Sin(ang) * 0.8f),
+                dropCenter + new Vector3(Mathf.Cos(ang) * 0.8f, 0.5f, Mathf.Sin(ang) * 0.8f),
                 Quaternion.identity);
             drop.item = s.item;
             drop.count = s.count;
@@ -301,6 +315,8 @@ public class Player : MonoBehaviour
         inv.Select(0);
 
         Teleport(hasCampfireSpawn ? lastCampfirePos + Vector3.up * 0.6f : spawnPos);
+        seaTimer = 0f;         // вылезли из моря — таймеры протухшего
+        seaToastShown = false; // майонеза сброшены
         Stats.SetState(Stats.maxMayo * 0.5f, 0f); // полведра; сбросит IsDead,
                                                   // экран смерти гаснет по StatsChanged
         GameEvents.RaiseNotify("Ты очнулся. Вещи остались там, где ты упал.");
@@ -429,6 +445,40 @@ public class Player : MonoBehaviour
             wasGrounded = false;
         }
         verticalVel += gravity * Time.deltaTime;
+
+        // Океан протухшего майонеза (§9): упасть можно, выплыть нельзя.
+        // Проверка ДО cc.Move — вязкость обязана глушить сам шаг.
+        // Числа подобраны так, чтобы за отведённые 3.5 с нельзя было
+        // выгрести обратно даже прыжками: 0.3 скорости × 3.5 с ≈ 4 м,
+        // а до берега от кромки 10+ м.
+        bool inSea = TerrainGen.IsInOcean(transform.position);
+        if (inSea)
+        {
+            dir *= 0.3f; // вязкий майонез: гребки почти впустую
+            // майонез держит — тонем плавно, а не камнем;
+            // прыжок гасится: выпрыгивать из ведра-в-ведре нечестно
+            verticalVel = Mathf.Min(Mathf.Max(verticalVel, -2.5f), 1.2f);
+            seaTimer += Time.deltaTime;
+            if (!seaToastShown && seaTimer >= 0.5f)
+            {
+                seaToastShown = true;
+                GameEvents.RaiseNotify("Протухший майонез засасывает ведро! Выбраться нельзя…");
+            }
+            // через 3.5 секунды ведро сдаётся: Damage клампит майонез в
+            // ноль — IsDead и RaisePlayerDied поднимутся сами
+            if (seaTimer >= 3.5f) Stats.Damage(Stats.Mayo);
+            if (Stats.IsDead) return; // мёртвое ведро не гребёт и не тикает
+        }
+        else
+        {
+            seaTimer = 0f;
+            seaToastShown = false;
+            // запоминаем последнюю сухую точку для дропа при утоплении;
+            // отмель во время отлива (дно ниже уровня моря) сухой не считаем
+            if (TerrainGen.HeightAt(transform.position.x, transform.position.z)
+                    > TerrainGen.SeaLevel + 0.3f)
+                lastDryPos = transform.position;
+        }
 
         cc.Move((dir * speed + Vector3.up * verticalVel) * Time.deltaTime);
 

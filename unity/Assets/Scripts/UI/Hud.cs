@@ -144,8 +144,12 @@ public class Hud : MonoBehaviour
         inventory = player != null ? player.GetComponent<Inventory>() : null;
     }
 
-    // Перезагрузка сцены (рестарт после смерти/из паузы): мы пережили —
-    // перепривязать всё сценное и сбросить UI в «чистую игру».
+    // Загрузка ЛЮБОЙ сцены: перепривязать сценное и синхронизировать
+    // состояние меню с флагом-одноразовиком skipMenuOnce.
+    // Важно про порядок старта: с запечённым в сцене Hud (SetupHud)
+    // Awake отрабатывает в процессе загрузки стартовой сцены, а это
+    // событие приходит ПОСЛЕ — поэтому меню тут вычисляется заново,
+    // а не гасится безусловно (был баг «меню не появляется при старте»).
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (this != instance) return; // подстраховка: дубликат молчит
@@ -159,12 +163,14 @@ public class Hud : MonoBehaviour
         BindScene();
         GameSettings.ApplyAll(); // FOV/чувствительность — новой камере/игроку
 
-        // сброс всех состояний: ни меню, ни паузы, ни панелей, ни смерти
-        skipMenuOnce = false;
-        menuOpen = false;
+        // меню: свежий вход → открыто; сюда же приходит рестарт после
+        // SkipMenuOnNextLoad → флаг съедается, меню не показываем
+        if (skipMenuOnce) { skipMenuOnce = false; menuOpen = false; }
+        else menuOpen = true;
         settingsOpen = false;
         settingsPanel.Hide();
-        mainMenu.gameObject.SetActive(false);
+        // Open() заодно обновляет состояние «Продолжить» (есть ли сейв)
+        if (menuOpen) mainMenu.Open(); else mainMenu.Close();
         inventoryOpen = false;
         inventoryPanel.gameObject.SetActive(false); // OnDisable панели довернёт драг
         craftOpen = false;

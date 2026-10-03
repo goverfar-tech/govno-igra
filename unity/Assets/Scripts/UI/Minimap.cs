@@ -59,6 +59,8 @@ public class Minimap : MonoBehaviour
     float[] worldX, worldZ;  // мировая координата каждого столбца/строки
     RectTransform mapRect;
     Image playerMarker, lakeMarker, townMarker, fireMarker;
+    Image wreckMarker, graveyardMarker;
+    Transform wreckPoint, graveyardPoint; // корни Shipwreck/BucketGraveyard из Setup
 
     Player player;           // кэш; игрок пересоздаётся на рестарте сцены
     float tickTimer;
@@ -115,6 +117,10 @@ public class Minimap : MonoBehaviour
             new Color(0.62f, 0.48f, 0.30f), 11f); // городок — коричневая точка
         fireMarker = MakeMarker("FireMarker", MakeDotTexture(9),
             new Color(0.95f, 0.55f, 0.15f), 9f);  // костёр — оранжевая точка
+        wreckMarker = MakeMarker("WreckMarker", MakeDotTexture(9),
+            new Color(0.60f, 0.32f, 0.24f), 9f);  // кораблекрушение — ржаво-коричневая
+        graveyardMarker = MakeMarker("GraveyardMarker", MakeDotTexture(9),
+            new Color(0.58f, 0.58f, 0.66f), 9f);  // кладбище вёдер — серая
         playerMarker = MakeMarker("PlayerMarker", MakeArrowTexture(16),
             new Color(0.93f, 0.90f, 0.78f), 15f); // игрок — кремовая стрелка
         lakeMarker.rectTransform.anchoredPosition =
@@ -313,6 +319,22 @@ public class Minimap : MonoBehaviour
         if (fire) // костёр переставляется — точку обновляем вместе с видимостью
             fireMarker.rectTransform.anchoredPosition =
                 WorldToMap(Player.lastCampfirePos.x, Player.lastCampfirePos.z);
+        // корабль и кладбище ставит Setup по имени; объекты пересоздаются
+        // на рестарте сцены — кэш с перепроверкой, как у player
+        if (wreckPoint == null)
+            wreckPoint = GameObject.Find("Shipwreck")?.transform;
+        if (graveyardPoint == null)
+            graveyardPoint = GameObject.Find("BucketGraveyard")?.transform;
+        wreckMarker.gameObject.SetActive(wreckPoint != null
+            && ExploredAt(wreckPoint.position.x, wreckPoint.position.z));
+        if (wreckPoint != null) // позиция корня статична, но объект пересоздаётся
+            wreckMarker.rectTransform.anchoredPosition =
+                WorldToMap(wreckPoint.position.x, wreckPoint.position.z);
+        graveyardMarker.gameObject.SetActive(graveyardPoint != null
+            && ExploredAt(graveyardPoint.position.x, graveyardPoint.position.z));
+        if (graveyardPoint != null)
+            graveyardMarker.rectTransform.anchoredPosition =
+                WorldToMap(graveyardPoint.position.x, graveyardPoint.position.z);
     }
 
     // ---------- сейв (SaveSystem) ----------

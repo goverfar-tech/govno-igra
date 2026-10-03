@@ -954,6 +954,151 @@ public static class SetupMainScene
             boss.pickupPrefab = pickupPrefabAsset;
         }
 
+        // --- кораблекрушение на мели (§9.7): юго-запад, прочь от причала
+        // и горы. Ищем точку отмели, где дно между −1.1 и +0.2 — корпус
+        // сидит на мели и торчит из майонеза. Внутри — сундук с лутом:
+        // кто-то доплыл до острова и не дошёл.
+        if (townPrefab.ContainsKey("structure-metal-wall")
+            && townPrefab.ContainsKey("structure-floor")
+            && townPrefab.ContainsKey("tree-trunk")
+            && townPrefab.ContainsKey("chest"))
+        {
+            Vector2 shipPos = Vector2.zero;
+            bool shipFound = false;
+            const float shipAng = 215f * Mathf.Deg2Rad; // юго-запад
+            for (float d = TerrainGen.IslandRadius - 30f;
+                 d <= TerrainGen.IslandRadius + 20f && !shipFound; d += 2f)
+            {
+                float x = Mathf.Cos(shipAng) * d, z = Mathf.Sin(shipAng) * d;
+                float h = TerrainGen.HeightAt(x, z);
+                if (h > -1.1f && h < 0.2f) { shipPos = new Vector2(x, z); shipFound = true; }
+            }
+            if (!shipFound)
+                missing.AppendLine("shipwreck: на мели не нашлось точки (−1.1..0.2 м)");
+            else
+            {
+                var wreck = new GameObject("Shipwreck");
+                wreck.transform.position = OnGround(shipPos.x, shipPos.y);
+                wreck.transform.rotation = Quaternion.Euler(0f, shipAng * Mathf.Rad2Deg, 0f);
+                var hull = new GameObject("Hull");
+                hull.transform.SetParent(wreck.transform, false);
+                hull.transform.localRotation = Quaternion.Euler(6f, 0f, 13f); // крен на мели
+
+                // днище: 2×3 секций настила; борта: панели с зазорами —
+                // корабль разбит, часть бортов сгнила совсем
+                GameObject Piece(string type, Vector3 lp, Vector3 lr, float s)
+                {
+                    var inst = (GameObject)PrefabUtility.InstantiatePrefab(townPrefab[type]);
+                    inst.transform.SetParent(hull.transform, false);
+                    inst.transform.localPosition = lp;
+                    inst.transform.localRotation = Quaternion.Euler(lr);
+                    inst.transform.localScale = Vector3.one * s;
+                    return inst;
+                }
+                for (int ix = 0; ix < 2; ix++)
+                    for (int iz = 0; iz < 3; iz++)
+                        Piece("structure-floor",
+                            new Vector3((ix - 0.5f) * 1.75f, 0.15f, (iz - 1f) * 1.75f),
+                            Vector3.zero, 3.5f);
+                // борта по длинной стороне, через один — проломы
+                for (int iz = 0; iz < 3; iz++)
+                {
+                    if (iz != 1) // правый борт дырявый
+                        Piece("structure-metal-wall",
+                            new Vector3(1.05f, 0.95f, (iz - 1f) * 1.8f),
+                            new Vector3(0f, 90f, -14f), 3.5f);
+                    if (iz != 2) // левый тоже не весь
+                        Piece("structure-metal-wall",
+                            new Vector3(-1.05f, 0.9f, (iz - 1f) * 1.8f),
+                            new Vector3(0f, 90f, 11f), 3.5f);
+                }
+                // корма/нос — торчком обломки
+                Piece("structure-metal-wall", new Vector3(0f, 0.8f, 2.7f),
+                    new Vector3(-70f, 0f, 6f), 3.2f);
+                // сломанная мачта лежит поперёк палубы
+                Piece("tree-trunk", new Vector3(0.3f, 0.75f, 0.2f),
+                    new Vector3(88f, 14f, 0f), 1.3f);
+
+                // сундук с лутом в корпусе — «доплыл и не дошёл»
+                var lootGo = new GameObject("Loot_Shipwreck_1");
+                lootGo.transform.SetParent(hull.transform, false);
+                lootGo.transform.localPosition = new Vector3(-0.4f, 0.75f, -1.4f);
+                var lootCol = lootGo.AddComponent<BoxCollider>();
+                lootCol.size = new Vector3(0.7f, 0.7f, 0.7f);
+                var lc = lootGo.AddComponent<LootContainer>();
+                lc.loot = new ItemData[] { flask, wood, stone, mayo, cookedMeat };
+                lc.rolls = 2;
+                var chestInst = (GameObject)PrefabUtility.InstantiatePrefab(townPrefab["chest"]);
+                chestInst.transform.SetParent(lootGo.transform, false);
+                chestInst.transform.localPosition = Vector3.zero;
+                chestInst.transform.localScale = Vector3.one * 2f;
+
+                // бочки сгнили рядом на дне
+                var b1 = SpawnModel("barrel", OnGround(shipPos.x - 3.5f, shipPos.y + 2f), "Wreck_Barrel", 2.5f);
+                if (b1 != null) b1.transform.rotation = Quaternion.Euler(0f, 40f, 78f);
+                var b2 = SpawnModel("barrel-open", OnGround(shipPos.x + 2.5f, shipPos.y + 3.5f), "Wreck_BarrelOpen", 2.5f);
+                if (b2 != null) b2.transform.rotation = Quaternion.Euler(0f, 110f, -84f);
+            }
+        }
+
+        // --- Кладбище вёдер (§9.7): северо-восточный холм. Ряды маленьких
+        // вёдер-надгробий — «здесь лежат те, чьё дно пробилось раньше».
+        // Часть повалена, в центре большое ведро Прародителя, кругом
+        // ограда с проломом. Чистый декор + приметная точка на миникарте.
+        var graveBucket = LoadModel("bucket");
+        if (graveBucket != null && townPrefab.ContainsKey("fence"))
+        {
+            var yard = new GameObject("BucketGraveyard");
+            yard.transform.position = OnGround(75f, 130f); // СВ холм, вне лужи/города/горы
+            int graveN = 0;
+            for (int gx = 0; gx < 4; gx++)
+                for (int gz = 0; gz < 4; gz++)
+                {
+                    graveN++;
+                    float jx = ((float)rng.NextDouble() - 0.5f) * 1.0f;
+                    float jz = ((float)rng.NextDouble() - 0.5f) * 1.0f;
+                    var grave = new GameObject("Grave_" + graveN);
+                    grave.transform.SetParent(yard.transform, false);
+                    grave.transform.localPosition = new Vector3(
+                        (gx - 1.5f) * 3.2f + jx, 0f, (gz - 1.5f) * 3.2f + jz);
+                    var gInst = (GameObject)PrefabUtility.InstantiatePrefab(graveBucket);
+                    gInst.transform.SetParent(grave.transform, false);
+                    float gs = 0.55f + (float)rng.NextDouble() * 0.3f;
+                    gInst.transform.localScale = Vector3.one * gs;
+                    if (graveN % 3 == 0)
+                    {
+                        // поваленное надгробие — лежит на боку
+                        grave.transform.localRotation =
+                            Quaternion.Euler(84f + (float)rng.NextDouble() * 12f, 0f,
+                                (float)rng.NextDouble() * 30f);
+                        grave.transform.localPosition += new Vector3(0f, gs * 0.5f, 0f);
+                    }
+                    else
+                        grave.transform.localRotation = Quaternion.Euler(0f,
+                            (float)rng.NextDouble() * 360f, 0f);
+                }
+            // Прародитель в центре — большое ведро
+            var elder = new GameObject("Grave_Elder");
+            elder.transform.SetParent(yard.transform, false);
+            elder.transform.localPosition = new Vector3(0f, 0f, 0f);
+            var eInst = (GameObject)PrefabUtility.InstantiatePrefab(graveBucket);
+            eInst.transform.SetParent(elder.transform, false);
+            eInst.transform.localScale = Vector3.one * 1.7f;
+            // ограда: 12 секций по кругу r=10 вокруг кладбища, один пролом
+            for (int f = 0; f < 12; f++)
+            {
+                if (f == 5 || f == 6) continue; // вход-пролом
+                float fa = f / 12f * Mathf.PI * 2f;
+                var fenceGo = SpawnTownPiece(townPrefab, "fence",
+                    OnGround(75f + Mathf.Cos(fa) * 10f, 130f + Mathf.Sin(fa) * 10f),
+                    "Grave_Fence_" + f, 1.6f);
+                if (fenceGo != null)
+                    fenceGo.transform.rotation = Quaternion.Euler(0f, -fa * Mathf.Rad2Deg, 0f);
+            }
+        }
+        else
+            missing.AppendLine("graveyard: bucket.glb или fence.glb недоступны");
+
         // --- заброшенности по острову: обломки лагерей ---
         // Кольцо 0.25–0.40*Size. Точка бракуется, если в океане или ниже
         // уровня воды; до 24 попыток, не нашли сушу — руина пропускается.
@@ -1068,21 +1213,38 @@ public static class SetupMainScene
         spawner.dropItem = meat; // с зомби падает сырая плоть
         spawner.pickupPrefab = pickupPrefabAsset;
 
-        // --- куры (§9.3): четыре, по одной на квандрант карты — «в разных
-        // частях карты» (S/баланс 2026-10-03; раньше была одна). Яйцо раз
-        // в 3 мин на курицу (layInterval в Chicken), не больше 3 штук
-        // вокруг — четыре курицы делают домашний майонез стабильным планом
-        // на еду, а не одной лотереей в глуши. Точка: диагональ квандранта
-        // ±35°, r 200–340 (rng), взаимная дистанция ≥120 м, до 16 попыток;
-        // брак — океан, пляж/пол пещеры (HeightAt ≤ CaveFloor), лужа,
-        // городок и вырез горы (тот же предикат, что в RandomPos).
+        // --- куры (§9.3): четыре. Первая — ГАРАНТИРОВАННАЯ у деревни
+        // (фидбек автора 2026-10-04): кольцо 15–55 м за кромкой городка
+        // в сторону центра острова — там всегда суша, курица не теряется
+        // в глуши. Остальные три — по квандрантам (r 200–340, взаимно
+        // ≥120 м). Запреты спавна для всех: океан, лужа, городок и ВСЯ
+        // гора (склоны и логово босса — курице там делать нечего).
         var chickenPts = new Vector2[4];
         int chickenCount = 0;
-        for (int q = 0; q < 4; q++)
+        // деревенская: от края городка к центру острова
         {
-            float sx = (q & 1) == 0 ? 1f : -1f;
-            float sz = q < 2 ? 1f : -1f;
-            float baseAng = Mathf.Atan2(sz, sx); // диагональ квандранта (±45°/±135°)
+            Vector2 inDir = -TerrainGen.TownCenter.normalized;
+            for (float d = TerrainGen.TownRadius + 15f; d <= TerrainGen.TownRadius + 55f; d += 5f)
+            {
+                var p = TerrainGen.TownCenter + inDir * d;
+                if (TerrainGen.IsInOcean(new Vector3(p.x, 1f, p.y))) continue;
+                if (Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 10f) continue;
+                chickenPts[chickenCount++] = p;
+                break;
+            }
+            if (chickenCount == 0)
+            {
+                // теоретически недостижимо (юго-восток от города — всегда
+                // суша), но без гарантии теряется смысл деревенской курицы
+                chickenPts[chickenCount++] = TerrainGen.TownCenter
+                    + inDir * (TerrainGen.TownRadius + 70f);
+            }
+        }
+        for (int q = 0; q < 3; q++)
+        {
+            float sx = q < 1 ? -1f : 1f;          // оставшиеся квандранты:
+            float sz = q < 2 ? 1f : -1f;          // северо-запад, юг, север-восток
+            float baseAng = Mathf.Atan2(sz, sx);
             for (int attempt = 0; attempt < 16; attempt++)
             {
                 float ang = baseAng + ((float)rng.NextDouble() - 0.5f) * 70f * Mathf.Deg2Rad;
@@ -1093,9 +1255,8 @@ public static class SetupMainScene
                 if (TerrainGen.HeightAt(x, z) <= TerrainGen.CaveFloor) continue;
                 if (Vector2.Distance(p, TerrainGen.LakeCenter) < TerrainGen.LakeRadius + 2f) continue;
                 if (Vector2.Distance(p, TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f) continue;
-                if (TerrainGen.HeightAt(x, z) < TerrainGen.CaveFloor + 2f
-                    && Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 6f)
-                    continue; // вырез пещеры в горе
+                if (Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 10f)
+                    continue; // вся гора, включая логово босса — зона запрета
                 bool tooClose = false;
                 for (int prev = 0; prev < chickenCount; prev++)
                     if (Vector2.Distance(p, chickenPts[prev]) < 120f) { tooClose = true; break; }

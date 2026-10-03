@@ -116,16 +116,18 @@ public static class SetupMainScene
         var flask = SyncItem("flask", "Фляга (сырой майонез)", 1, food: 20f, poison: 15f, consumeReturns: flaskEmpty);
         var wood = SyncItem("wood", "Древесина", 30, worldModel: "resource-wood");
         var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
-        var meat = SyncItem("meat", "Сырая плоть", 10, food: 12f, poison: 30f);      // §9.3: мало + яд
-        SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f);              // готовка режет яд
+        var meat = SyncItem("meat", "Сырая плоть", 10, food: 12f, poison: 30f, worldModel: "meat");      // §9.3: мало + яд
+        SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f, worldModel: "meat-patty");         // готовка режет яд
         // Яйца больше НЕ еда (решение автора 2026-10-03): персонаж —
         // майонезное ведро, ест только майонез и его производные (котлеты).
         // food: 0 — сырое яйцо лишь ингредиент рецепта «Домашний майонез».
-        var egg = SyncItem("egg", "Яйцо", 10, food: 0f);
-        var mayo = SyncItem("mayo", "Домашний майонез", 10, food: 35f, heal: 5f);   // чистая еда §9.3
+        var egg = SyncItem("egg", "Яйцо", 10, food: 0f, worldModel: "egg");
+        var mayo = SyncItem("mayo", "Домашний майонез", 10, food: 35f, heal: 5f, worldModel: "jar");     // чистая еда §9.3
         var spear = SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
-        var campfire = SyncItem("campfire", "Костёр", 5, isPlaceable: true, placeablePrefab: campfirePrefab);
-        var wall = SyncItem("wall", "Деревянная стена", 10, isPlaceable: true, placeablePrefab: wallPrefab);
+        // worldModel у постройками — только для иконки и вида в руке:
+        // в мире ставится placeablePrefab, как и раньше
+        var campfire = SyncItem("campfire", "Костёр", 5, isPlaceable: true, placeablePrefab: campfirePrefab, worldModel: "campfire-pit");
+        var wall = SyncItem("wall", "Деревянная стена", 10, isPlaceable: true, placeablePrefab: wallPrefab, worldModel: "resource-planks");
 
         // --- пикап-заготовка для дропа ---
         // (берём бревно как визуал дропа дерева)

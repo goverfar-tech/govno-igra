@@ -56,6 +56,14 @@ public class Player : MonoBehaviour
     IInteractable focus;
     string lastPrompt;
 
+    // Вид-модель выбранного предмета в руке (S): ребёнок головы,
+    // размер нормируется независимо от масштаба GLB; коллайдеры у копии
+    // отбираем — рука не должна ловить столкновения.
+    Transform hand;
+    GameObject handModel;
+    ItemData handItem;
+    const float handSize = 0.42f;
+
     // Точка возрождения (§9.5): последний костёр, у которого грелись
     // (ставит Campfire в Update, пока игрок в радиусе тепла).
     // Пока ни одного — просыпаемся на старте сцены.
@@ -78,12 +86,33 @@ public class Player : MonoBehaviour
         Inventory = GetComponent<Inventory>();
         Stats = GetComponent<Stats>();
         spawnPos = transform.position;
+
+        // якорь «в руке»: правее-ниже центра экрана, чуть повёрнут внутрь.
+        // Вид-модель ребёнок головы — наследует headbob автоматически.
+        if (head != null)
+        {
+            hand = new GameObject("Hand").transform;
+            hand.SetParent(head, false);
+            hand.localPosition = new Vector3(0.38f, -0.34f, 0.62f);
+            hand.localRotation = Quaternion.Euler(-6f, -18f, 4f);
+        }
+
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
-    void OnEnable() => GameEvents.InventoryOpenChanged += OnInventoryOpen;
-    void OnDisable() => GameEvents.InventoryOpenChanged -= OnInventoryOpen;
+    void OnEnable()
+    {
+        GameEvents.InventoryOpenChanged += OnInventoryOpen;
+        GameEvents.SelectionChanged += RefreshHand;
+        GameEvents.InventoryChanged += RefreshHand;
+    }
+    void OnDisable()
+    {
+        GameEvents.InventoryOpenChanged -= OnInventoryOpen;
+        GameEvents.SelectionChanged -= RefreshHand;
+        GameEvents.InventoryChanged -= RefreshHand;
+    }
     void OnInventoryOpen(bool open)
     {
         inputBlocked = open;
@@ -216,6 +245,34 @@ public class Player : MonoBehaviour
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         pitch = newPitch;
         if (head != null) head.localEulerAngles = new Vector3(pitch, 0f, 0f);
+    }
+
+    // Пересобрать вид-модель в руке под выбранный слот.
+    void Start() => RefreshHand();
+
+    void RefreshHand()
+    {
+        if (Inventory == null) return;
+        var item = Inventory.slots[Inventory.selected].item;
+        if (item == handItem) return;
+        handItem = item;
+        if (handModel != null) { Destroy(handModel); handModel = null; }
+        if (item == null || item.worldModel == null || hand == null) return;
+
+        handModel = Instantiate(item.worldModel, hand);
+        foreach (var col in handModel.GetComponentsInChildren<Collider>())
+            Destroy(col);
+
+        var rends = handModel.GetComponentsInChildren<Renderer>();
+        if (rends.Length == 0) return;
+        var b = rends[0].bounds;
+        foreach (var r in rends) b.Encapsulate(r.bounds);
+        float maxDim = Mathf.Max(b.size.x, b.size.y, b.size.z);
+        if (maxDim > 0.0001f) handModel.transform.localScale *= handSize / maxDim;
+        // центр модели — на якоре руки
+        b = rends[0].bounds;
+        foreach (var r in rends) b.Encapsulate(r.bounds);
+        handModel.transform.position += hand.position - b.center;
     }
 
     // Возрождение по §9.5 (corpse run): весь инвентарь вываливается

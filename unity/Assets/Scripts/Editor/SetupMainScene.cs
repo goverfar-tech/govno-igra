@@ -6,7 +6,9 @@ using UnityEngine;
 // Один раз собирает и сохраняет сцену Assets/Scenes/Main.unity:
 // земля, солнце с DayNight, игрок (капсула + Player/Inventory/Stats,
 // Head с камерой), DebugHud, дерево и камень как ResourceNode,
-// ягодный пикап, ItemData-ассеты (wood/stone/berry).
+// ItemData-ассеты (древесина/камень/плоть/фляги/яйцо/майонез;
+// ягоды и их кусты убраны автором 2026-10-03, ассет berry.asset
+// остаётся в Resources как балласт — удалить руками при желании).
 // Запуск: верхнее меню → Survival → Setup Main Scene.
 public static class SetupMainScene
 {
@@ -111,7 +113,6 @@ public static class SetupMainScene
         var flask = SyncItem("flask", "Фляга (сырой майонез)", 1, food: 20f, poison: 15f, consumeReturns: flaskEmpty);
         var wood = SyncItem("wood", "Древесина", 30, worldModel: "resource-wood");
         var stone = SyncItem("stone", "Камень", 30, worldModel: "resource-stone");
-        var berry = SyncItem("berry", "Ягода", 20, food: 12f);
         var meat = SyncItem("meat", "Сырая плоть", 10, food: 12f, poison: 30f);      // §9.3: мало + яд
         SyncItem("cooked_meat", "Котлета", 10, food: 45f, poison: 8f);              // готовка режет яд
         var egg = SyncItem("egg", "Яйцо", 10, food: 8f);
@@ -177,19 +178,8 @@ public static class SetupMainScene
             rn.yield = stone; rn.hitsLeft = 3; rn.pickupPrefab = pickupPrefabAsset;
         }
 
-        // ягодные кусты (10 шт, пикап ягоды на кусте)
-        for (int i = 0; i < 10; i++)
-        {
-            var b = SpawnModel("grass-large", RandomPos(rng, 10f, 80f), "Bush" + i, 2f);
-            if (b == null) { if (i == 0) missing.AppendLine("scatter bushes"); continue; }
-            var bc = b.AddComponent<SphereCollider>();
-            bc.isTrigger = true; // куст не блокирует движение
-            bc.center = new Vector3(0f, 0.5f, 0f);
-            bc.radius = 0.9f;
-            var bp = b.AddComponent<PickupItem>();
-            bp.item = berry;
-            bp.count = 2;
-        }
+        // ягодных кустов больше нет (решение автора 2026-10-03:
+        // белые точки-глитчи на всю карту, ягоды не нужны по мете §9.3)
 
         // озеро: вода + наполнение фляги
         float lakeY = TerrainGen.HeightAt(TerrainGen.LakeCenter.x, TerrainGen.LakeCenter.y);

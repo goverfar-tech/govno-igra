@@ -335,6 +335,11 @@ public static class SetupMainScene
         // чтобы не требовался отдельный запуск меню «Setup HUD»
         SetupHud.Run();
 
+        // Иконки предметов тоже здесь: repair Campfire.prefab обновляет
+        // placeablePrefab, иконки должны перепечься в тот же заход —
+        // иначе забудется, и слот костра останется пустым навсегда
+        IconBaker.Run();
+
         Debug.Log($"[Survival] Сцена Main собрана и сохранена. Жми Play!");
         string msg = missing.Length == 0
             ? "Сцена Main собрана!\nЖми Play и тестируй."

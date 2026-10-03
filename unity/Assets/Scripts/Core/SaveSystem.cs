@@ -57,6 +57,9 @@ public class SaveSystem : MonoBehaviour
 
     static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
 
+    // Есть ли вообще файл сохранения (меню «Продолжить» сереет без него).
+    public static bool HasSave => File.Exists(SavePath);
+
     static Dictionary<string, ItemData> catalog;
     static Dictionary<string, ItemData> Catalog
     {
@@ -141,12 +144,14 @@ public class SaveSystem : MonoBehaviour
         GameEvents.RaiseNotify($"Сохранено (всего построек: {data.placed.Count})");
     }
 
-    void Load()
+    // false — загрузка не состоялась (нет файла/битый/старая версия/
+    // нет игрока): нужно, чтобы меню «Продолжить» не закрывалось впустую.
+    bool Load()
     {
         if (!File.Exists(SavePath))
         {
             GameEvents.RaiseNotify("Нет сохранения");
-            return;
+            return false;
         }
 
         string json;
@@ -158,7 +163,7 @@ public class SaveSystem : MonoBehaviour
         {
             Debug.LogWarning("SaveSystem: не удалось прочитать сейв: " + e.Message);
             GameEvents.RaiseNotify("Не удалось прочитать сейв");
-            return;
+            return false;
         }
 
         SaveData data = null;
@@ -173,15 +178,15 @@ public class SaveSystem : MonoBehaviour
         if (data == null)
         {
             GameEvents.RaiseNotify("Сейв повреждён");
-            return;
+            return false;
         }
         if (data.version != 2)
         {
             GameEvents.RaiseNotify("Сейв старой версии — не встаёт, начни заново");
-            return;
+            return false;
         }
         var player = FindFirstObjectByType<Player>();
-        if (player == null) return;
+        if (player == null) return false;
 
         // id предметов, исчезнувших из проекта со времён сейва — один тост в конце.
         var lost = new List<string>();
@@ -264,18 +269,11 @@ public class SaveSystem : MonoBehaviour
         if (lost.Count > 0)
             GameEvents.RaiseNotify("Утеряно при загрузке: " + string.Join(", ", lost));
         GameEvents.RaiseNotify("Загружено");
+        return true;
     }
 
     // Публичный фасад для UI (главное меню, Поток B): та же логика, что у F9.
-    // Возвращает false, если сейва нет — меню остаётся открытым (тост уже показан).
-    public bool LoadGame()
-    {
-        if (!File.Exists(SavePath))
-        {
-            GameEvents.RaiseNotify("Нет сохранения");
-            return false;
-        }
-        Load();
-        return true;
-    }
+    // Возвращает false при любой неудаче — меню остаётся открытым
+    // (конкретный тост уже показан Load'ом).
+    public bool LoadGame() => Load();
 }

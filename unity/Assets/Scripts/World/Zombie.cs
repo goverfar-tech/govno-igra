@@ -193,7 +193,7 @@ public class Zombie : MonoBehaviour
                         player.Stats.Damage(attackDamage);
                         player.NotifyDamaged(attackDamage); // R4: тряска камеры жертвы
                         AudioManager.GruntAt(transform.position, 0f); // удар — рык погромче
-                        GameEvents.RaiseNotify("Зомби выбивает майонез! -" + attackDamage);
+                        // тоста про урон нет: вспышка+тряска+рык говорят сами (2026-10-03)
                     }
                 }
                 break;

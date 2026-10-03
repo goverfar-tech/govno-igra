@@ -18,7 +18,6 @@ public class Campfire : MonoBehaviour, IInteractable
     float cookTimer;                // >0 — идёт готовка
     Player player;
     float nextNag;                  // антиспам тоста «Уже жарится»
-    bool toldWarm;
     float playerSearchRetry; // повторный поиск не чаще раза в секунду
 
     void Awake()
@@ -107,13 +106,9 @@ public class Campfire : MonoBehaviour, IInteractable
             player.Stats.lastWarmTime = Time.time;
             // костёр — точка возрождения (§9.5): последний, у которого грелись
             Player.lastCampfirePos = transform.position;
+            // (тост про тепло убран: авторская правка 2026-10-03 —
+            // огонь и ночной множитель и так читаются без надписи)
             Player.hasCampfireSpawn = true;
-            if (!toldWarm)
-            {
-                toldWarm = true;
-                GameEvents.RaiseNotify("Тепло костра согревает");
-            }
         }
-        else toldWarm = false;
     }
 }

@@ -63,6 +63,15 @@ public class Player : MonoBehaviour
     public static bool hasCampfireSpawn;
     Vector3 spawnPos;
 
+    // Статика точки респауна не должна переживать перезапуск сессии —
+    // иначе без domain reload «последний костёр» протекал бы в новый мир.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics()
+    {
+        lastCampfirePos = default;
+        hasCampfireSpawn = false;
+    }
+
     void Awake()
     {
         cc = GetComponent<CharacterController>();

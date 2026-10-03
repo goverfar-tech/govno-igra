@@ -35,6 +35,17 @@ public class Hud : MonoBehaviour
     static bool skipMenuOnce;
     public static void SkipMenuOnNextLoad() => skipMenuOnce = true;
 
+    // Сброс статики на вход в Play/перезагрузку домена: без этого
+    // skipMenuOnce мог пережить запуск и стартовое меню не показывалось
+    // (вижу «игра сразу генерит мир без меню»). При включённом домен-
+    // ресеете это дёшево и безвредно.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics()
+    {
+        instance = null;
+        skipMenuOnce = false;
+    }
+
     // Единственный живой Hud; копии из перезагруженной сцены самоубиваются.
     static Hud instance;
 

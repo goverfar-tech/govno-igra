@@ -13,6 +13,16 @@ public class SaveSystem : MonoBehaviour
 {
     public static SaveSystem Instance { get; private set; }
 
+    // Сброс статики при входе в Play-режим / на старте билда:
+    // иначе при выключенном domain reload Instance и кэш-каталог
+    // переживают запуск и ссылаются на мёртвые объекты прошлой сессии.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics()
+    {
+        Instance = null;
+        catalog = null;
+    }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {

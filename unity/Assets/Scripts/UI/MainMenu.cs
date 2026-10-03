@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 // Стартовое главное меню-оверлей (Поток B). Без отдельной сцены:
 // строится в том же HudCanvas поверх мира, при запуске игра стоит
@@ -10,6 +11,12 @@ public class MainMenu : MonoBehaviour
     public System.Action ContinueRequested;
     public System.Action NewGameRequested;
     public System.Action SettingsRequested;
+
+    // Ссылки на построенные элементы — нужны RefreshButtons (реакция на сейв)
+    Button continueButton;
+    Text continueLabel;
+    Text subTitle;
+    const string DefaultSub = "ведро с пробитым дном";
 
     public static MainMenu Create(Transform parent)
     {
@@ -32,19 +39,31 @@ public class MainMenu : MonoBehaviour
         sr.anchorMin = sr.anchorMax = new Vector2(0.5f, 0.5f);
         sr.anchoredPosition = new Vector2(0f, 105f);
         sr.sizeDelta = new Vector2(900f, 26f);
-        sub.text = "ведро с пробитым дном";
+        sub.text = DefaultSub;
         sub.color = new Color(1f, 1f, 1f, 0.55f);
+        view.subTitle = sub;
 
-        view.MakeButton("Продолжить", 24f, () => view.ContinueRequested?.Invoke());
+        view.continueButton =
+            view.MakeButton("Продолжить", 24f, () => view.ContinueRequested?.Invoke());
         view.MakeButton("Новая игра", -32f, () => view.NewGameRequested?.Invoke());
         view.MakeButton("Настройки", -88f, () => view.SettingsRequested?.Invoke());
         view.MakeButton("Выйти", -144f, Quit);
 
+        // Подсказка-хинт внизу меню: механика сейвов должна быть обнаружимой
+        var hint = UiWidgets.Text(veil.transform, "Hint", 13);
+        var hr = (RectTransform)hint.transform;
+        hr.anchorMin = hr.anchorMax = new Vector2(0.5f, 0.5f);
+        hr.anchoredPosition = new Vector2(0f, -205f);
+        hr.sizeDelta = new Vector2(600f, 20f);
+        hint.text = "F5 — сохраниться, F9 — загрузить";
+        hint.color = new Color(1f, 1f, 1f, 0.4f); // маленький приглушённый
+
+        view.RefreshButtons(); // сразу после построения
         veil.gameObject.SetActive(false);
         return view;
     }
 
-    void MakeButton(string label, float y, System.Action onClick)
+    Button MakeButton(string label, float y, System.Action onClick)
     {
         var btn = UiWidgets.Button(transform, label.Replace(" ", "") + "Button", label, 20);
         var rt = (RectTransform)btn.transform;
@@ -53,9 +72,34 @@ public class MainMenu : MonoBehaviour
         rt.anchoredPosition = new Vector2(0f, y);
         rt.sizeDelta = new Vector2(300f, 46f);
         btn.onClick.AddListener(() => onClick());
+        return btn;
     }
 
-    public void Open() => gameObject.SetActive(true);
+    // Обновить состояние «Продолжить» по факту наличия сейва.
+    // Вызывается после построения и при каждом открытии меню (Open).
+    public void RefreshButtons()
+    {
+        bool has = SaveSystem.HasSave;
+        if (continueButton != null)
+        {
+            continueButton.interactable = has;
+            if (continueLabel == null)
+                continueLabel = continueButton.GetComponentInChildren<Text>();
+            if (continueLabel != null)
+                // нет сейва — текст кнопки серый, чтобы не кликали впустую
+                continueLabel.color = has
+                    ? UiWidgets.TextColor
+                    : new Color(1f, 1f, 1f, 0.35f);
+        }
+        if (subTitle != null)
+            subTitle.text = has ? DefaultSub : DefaultSub + " · сохранений нет";
+    }
+
+    public void Open()
+    {
+        RefreshButtons(); // сейв мог появиться/исчезнуть между открытиями
+        gameObject.SetActive(true);
+    }
     public void Close() => gameObject.SetActive(false);
 
     static void Quit()

@@ -107,7 +107,8 @@ public class Hud : MonoBehaviour
         // стартовое меню — только на «свежем» запуске, не после рестарта
         if (skipMenuOnce) { skipMenuOnce = false; menuOpen = false; }
         else menuOpen = true;
-        mainMenu.gameObject.SetActive(menuOpen);
+        // Open() добавочно зовёт RefreshButtons — «Продолжить» сразу если сейв
+        if (menuOpen) mainMenu.Open(); // объект уже скрыт в MainMenu.Create
         SyncUiActive();
         SyncTimeScale();
 
@@ -532,7 +533,7 @@ public class Hud : MonoBehaviour
         settingsOpen = false;
         settingsPanel.Hide();
         GameSettings.Flush();
-        if (settingsFromMenu) mainMenu.gameObject.SetActive(true);
+        if (settingsFromMenu) mainMenu.Open(); // +RefreshButtons заодно
         SyncUiActive();
     }
 

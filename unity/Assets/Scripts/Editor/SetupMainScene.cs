@@ -5,10 +5,12 @@ using UnityEngine;
 
 // Один раз собирает и сохраняет сцену Assets/Scenes/Main.unity:
 // земля, солнце с DayNight, игрок (капсула + Player/Inventory/Stats,
-// Head с камерой), DebugHud, дерево и камень как ResourceNode,
-// ItemData-ассеты (древесина/камень/плоть/фляги/яйцо/майонез;
-// ягоды и их кусты убраны автором 2026-10-03, ассет berry.asset
-// остаётся в Resources как балласт — удалить руками при желании).
+// Head с камерой), DebugHud, деревья и камни как ResourceNode (50/18 шт),
+// силуэты-«сторожа» по краю карты и две пасхалки §9.7 (Monument_Bucket,
+// MayoMonolith) как чистый визуал. ItemData-ассеты (древесина/камень/плоть/
+// фляги/яйцо/майонез; ягоды и их кусты убраны автором 2026-10-03,
+// ассет berry.asset остаётся в Resources как балласт — удалить руками
+// при желании).
 // Запуск: верхнее меню → Survival → Setup Main Scene.
 public static class SetupMainScene
 {
@@ -150,12 +152,14 @@ public static class SetupMainScene
         // --- мир M4: рассеивание по seed + озеро ---
         var rng = new System.Random(1337);
 
-        // деревья (30 шт, все добываемые)
-        for (int i = 0; i < 30; i++)
+        // деревья (50 шт, все добываемые)
+        const int treeTotal = 50;
+        int treesSkipped = 0;
+        for (int i = 0; i < treeTotal; i++)
         {
             var t = SpawnModel(i % 3 == 0 ? "tree-tall" : "tree", RandomPos(rng, 14f, 90f),
                 "Tree" + i, 2.6f + (float)rng.NextDouble() * 0.8f);
-            if (t == null) { if (i == 0) missing.AppendLine("scatter trees"); continue; }
+            if (t == null) { treesSkipped++; continue; }
             var tc = t.AddComponent<CapsuleCollider>();
             tc.center = new Vector3(0f, 1.3f, 0f);
             tc.height = 2.6f;
@@ -163,23 +167,83 @@ public static class SetupMainScene
             var tn = t.AddComponent<ResourceNode>();
             tn.yield = wood; tn.hitsLeft = 3; tn.pickupPrefab = pickupPrefabAsset;
         }
+        if (treesSkipped > 0)
+            missing.AppendLine($"scatter trees: пропущено {treesSkipped} из {treeTotal} (нет GLB-моделей)");
 
-        // камни (12 шт)
+        // камни (18 шт)
         string[] rockModels = { "rock-a", "rock-b", "rock-c" };
-        for (int i = 0; i < 12; i++)
+        const int rockTotal = 18;
+        int rocksSkipped = 0;
+        for (int i = 0; i < rockTotal; i++)
         {
             var r = SpawnModel(rockModels[i % 3], RandomPos(rng, 14f, 90f),
                 "Rock" + i, 1.5f + (float)rng.NextDouble() * 0.7f);
-            if (r == null) { if (i == 0) missing.AppendLine("scatter rocks"); continue; }
+            if (r == null) { rocksSkipped++; continue; }
             var rc = r.AddComponent<BoxCollider>();
             rc.center = new Vector3(0f, 0.5f, 0f);
             rc.size = new Vector3(1.2f, 1f, 1.2f);
             var rn = r.AddComponent<ResourceNode>();
             rn.yield = stone; rn.hitsLeft = 3; rn.pickupPrefab = pickupPrefabAsset;
         }
+        if (rocksSkipped > 0)
+            missing.AppendLine($"scatter rocks: пропущено {rocksSkipped} из {rockTotal} (нет GLB-моделей)");
 
         // ягодных кустов больше нет (решение автора 2026-10-03:
         // белые точки-глитчи на всю карту, ягоды не нужны по мете §9.3)
+        // → в missing-отчёте для них строк тоже не держим.
+
+        // --- силуэты по периметру: край карты не должен быть пустым ---
+        // Кольцо на 88–96 м от центра (карта ±100 м, дальше не лезем):
+        // редкие крупные камни и мёртвые деревья. Это АТМОСФЕРА, не забор:
+        // коллайдер ставим только большим камням, деревья-силуэты — декор.
+        string[] edgeRocks = { "rock-sand-a", "rock-sand-b", "rock-sand-c" };
+        string[] edgeDeadTrees = { "tree-trunk", "tree-autumn-trunk", "tree-autumn-tall" };
+        const int edgeTotal = 14;
+        int edgeSkipped = 0;
+        for (int i = 0; i < edgeTotal; i++)
+        {
+            // равномерный обход круга + джиттер, чтобы не «забор из столбов»
+            float ang = i / (float)edgeTotal * Mathf.PI * 2f
+                        + ((float)rng.NextDouble() - 0.5f) * 0.35f;
+            float r = Mathf.Lerp(88f, 96f, (float)rng.NextDouble());
+            float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
+            bool isRock = rng.Next(0, 2) == 0;
+            string model = isRock
+                ? edgeRocks[rng.Next(0, edgeRocks.Length)]
+                : edgeDeadTrees[rng.Next(0, edgeDeadTrees.Length)];
+            var s = SpawnModel(model, OnGround(x, z), "Edge" + i,
+                isRock ? 3.5f + (float)rng.NextDouble() * 1.5f
+                       : 3.0f + (float)rng.NextDouble() * 1.0f);
+            if (s == null) { edgeSkipped++; continue; }
+            // поворот по случайному курсу — иначе все «смотрят» в одну сторону
+            s.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+            if (isRock)
+            {
+                var bc = s.AddComponent<BoxCollider>();
+                bc.center = new Vector3(0f, 1f, 0f);
+                bc.size = new Vector3(2.5f, 2f, 2.5f);
+            }
+        }
+        if (edgeSkipped > 0)
+            missing.AppendLine($"edge silhouettes: пропущено {edgeSkipped} из {edgeTotal} (нет GLB-моделей)");
+
+        // --- пасхалки §9.7: чисто визуальные пропсы, без интерактива ---
+        // (а) «Памятник ведру» — большое ведро в честь Прародителя Майонеза.
+        //     Стоит в 20–60 м от спауна (озеро исключает RandomPos само).
+        var monument = SpawnModel("bucket", RandomPos(rng, 20f, 60f), "Monument_Bucket", 3f);
+        if (monument == null)
+            missing.AppendLine("easter egg: Monument_Bucket (bucket.glb)");
+        else
+            monument.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+
+        // (б) «Майолит» — гигантская банка сырого майонеза у самого края
+        //     карты. Видна издалека, как дурной знак над горизонтом.
+        var monolith = SpawnModel("bottle-large", RandomPos(rng, 85f, 95f), "MayoMonolith", 10f);
+        if (monolith == null)
+            missing.AppendLine("easter egg: MayoMonolith (bottle-large.glb)");
+        else
+            monolith.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+
 
         // озеро: вода + наполнение фляги
         float lakeY = TerrainGen.HeightAt(TerrainGen.LakeCenter.x, TerrainGen.LakeCenter.y);
@@ -190,8 +254,13 @@ public static class SetupMainScene
         water.name = "Surface";
         water.transform.SetParent(lake.transform, false);
         water.transform.localScale = new Vector3(TerrainGen.LakeRadius * 1.6f, 0.05f, TerrainGen.LakeRadius * 1.6f);
-        water.GetComponent<MeshRenderer>().sharedMaterial =
-            CreateMaterial("Mayo", new Color(0.93f, 0.88f, 0.62f)); // майонезная лужа, §9
+        // майонезная лужа (§9): если уже есть руками настроенный Mayo.mat —
+        // берём ЕГО (автор мог подкрутить глянец/цвет), иначе — fallback
+        // через CreateMaterial с базовым кремовым цветом
+        var mayoMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Mayo.mat");
+        if (mayoMat == null)
+            mayoMat = CreateMaterial("Mayo", new Color(0.93f, 0.88f, 0.62f));
+        water.GetComponent<MeshRenderer>().sharedMaterial = mayoMat;
         var waterCol = water.GetComponent<CapsuleCollider>();
         if (waterCol != null) Object.DestroyImmediate(waterCol);
 

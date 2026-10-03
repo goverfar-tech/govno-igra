@@ -205,9 +205,10 @@ public class SaveSystem : MonoBehaviour
             if (!string.IsNullOrEmpty(id) && !lost.Contains(id)) lost.Add(id);
         }
 
-        // ночная стая привязана к старой позиции — при загрузке убираем всех
-        foreach (var z in FindObjectsByType<Zombie>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-            Destroy(z.gameObject);
+        // Ночную стаю НЕ снимаем (первый вариант с Destroy давал
+        // «сохранился-загрузился = исчезли зомби»): игрок телепортируется,
+        // зомби теряют его из виду (LOS) и разбредаются сами — дневной
+        // рассвет дочистит. ZombieSpawner.alive почистится на след. ночи.
 
         // постройки: старые убрать, сохранённые вернуть
         foreach (var p in FindObjectsByType<Placed>(FindObjectsSortMode.None))

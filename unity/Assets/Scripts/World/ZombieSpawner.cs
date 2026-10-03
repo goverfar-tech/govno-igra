@@ -13,6 +13,10 @@ public class ZombieSpawner : MonoBehaviour
 
     static readonly List<Zombie> alive = new List<Zombie>();
     bool wasNight;
+    int nightsPassed; // эскалация приливов §9.4: +1 зомби каждые 2 ночи
+
+    // сколько спавнить в эту ночь: мягкий глобальный таймер — ночи растут
+    int EffectivePerNight() => Mathf.Min(perNight + nightsPassed / 2, 8);
 
     void OnEnable() => GameEvents.TimeOfDayChanged += OnTime;
     void OnDisable() => GameEvents.TimeOfDayChanged -= OnTime;
@@ -35,8 +39,10 @@ public class ZombieSpawner : MonoBehaviour
         wasNight = true;
 
         alive.RemoveAll(z => z == null);
-        int cap = Mathf.Max(perNight * 2, 6); // предохранитель от нашествия
-        int toSpawn = Mathf.Min(perNight, cap - alive.Count);
+        int want = EffectivePerNight();
+        int cap = Mathf.Max(want * 2, 6); // предохранитель от нашествия
+        int toSpawn = Mathf.Min(want, cap - alive.Count);
+        nightsPassed++;
         if (toSpawn <= 0) return;
 
         for (int i = 0; i < toSpawn; i++)

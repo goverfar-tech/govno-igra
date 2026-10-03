@@ -9,7 +9,9 @@ public class Zombie : MonoBehaviour
 {
     public float maxHp = 30f;
     public float walkSpeed = 1.6f;
-    public float chaseSpeed = 3.2f;
+    // быстрее шага игрока (4), медленнее спринта (6.4): оторваться можно,
+    // но бег жжёт ведро ×1.6 и оставляет жирный след — выбор, не халява
+    public float chaseSpeed = 4.6f;
     public float noticeRange = 12f;
     public float attackRange = 1.8f;
     public float attackDamage = 8f;

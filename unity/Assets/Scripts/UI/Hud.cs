@@ -71,6 +71,15 @@ public class Hud : MonoBehaviour
     float lastMayo = -1f, lastPoison = -1f, lastTime = -1f;
     bool lastNight;
 
+    // Красная вспышка при уроне (R4, §11.5 «урон ощутим»): полноэкранная
+    // вуаль поверх мира, но ниже экрана смерти/меню (порядок в Build).
+    Image damageVeil;
+    float flashTimer;   // оставшееся время гашения
+    float flashPeak;    // стартовая альфа текущей вспышки
+    const float FlashThreshold = 1.5f; // разовая потеря больше — это удар,
+                                       // а не утечка/яд (те ≤ ~0.4 за кадр)
+    const float FlashDuration = 0.35f;
+
     void Awake()
     {
         // синглтон-гвард: копия из перезагруженной сцены не нужна —
@@ -154,6 +163,10 @@ public class Hud : MonoBehaviour
         deathScreen.Hide();
         TooltipService.Hide();
 
+        // на рестарте вуаль урона не должна догорать в свежей сцене
+        flashTimer = 0f;
+        if (damageVeil != null) SetVeilAlpha(0f);
+
         SyncUiActive();
         SyncTimeScale();
         RefreshAll();
@@ -197,6 +210,16 @@ public class Hud : MonoBehaviour
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+        }
+
+        // Вуаль урона (R4) гаснет линейно от пика. У мёртвого — сразу
+        // в ноль, чтобы красное не застряло под экраном смерти.
+        // Блок стоит ДО return по dead: иначе гашение бы не добегало.
+        if (damageVeil != null && damageVeil.color.a > 0f)
+        {
+            if (dead) flashTimer = 0f;
+            else flashTimer = Mathf.Max(0f, flashTimer - Time.unscaledDeltaTime);
+            SetVeilAlpha(flashPeak * (flashTimer / FlashDuration));
         }
 
         if (dead)
@@ -254,6 +277,8 @@ public class Hud : MonoBehaviour
         hotbar = HotbarView.Create(crt);
         inventoryPanel = InventoryPanelView.Create(crt, inventory);
         craftPanel = CraftPanel.Create(crt, inventory);
+        BuildDamageVeil(crt); // ДО deathScreen/pauseMenu/mainMenu: вуаль
+                              // выше мира и HUD, но под экраном смерти/меню
         deathScreen = DeathScreen.Create(crt);
         deathScreen.RestartRequested = RespawnPlayer; // §9.5: воскрешение, мир сохраняется
         pauseMenu = PauseMenu.Create(crt);
@@ -325,6 +350,31 @@ public class Hud : MonoBehaviour
         rt.anchoredPosition = pos;
     }
 
+    // Красная вуаль урона на весь экран. Изначально невидима (альфа 0),
+    // проявляется FlashDamage и гаснет в Update.
+    void BuildDamageVeil(RectTransform root)
+    {
+        damageVeil = UiWidgets.FullscreenVeil(root, "DamageVeil",
+            new Color(0.62f, 0.05f, 0.03f, 0f));
+    }
+
+    // Вспышка: сила пропорциональна выбитому майонезу (clamp 0.25..0.55) —
+    // лёгкий тычок и полноценный удар зомби читаются по-разному.
+    void FlashDamage(float drop)
+    {
+        if (damageVeil == null) return;
+        flashPeak = Mathf.Clamp(drop / 15f, 0.25f, 0.55f);
+        flashTimer = FlashDuration;
+        SetVeilAlpha(flashPeak);
+    }
+
+    void SetVeilAlpha(float a)
+    {
+        var c = damageVeil.color;
+        c.a = a;
+        damageVeil.color = c;
+    }
+
     void BuildPrompt(RectTransform root)
     {
         promptText = UiWidgets.Text(root, "Prompt", 20);
@@ -354,6 +404,14 @@ public class Hud : MonoBehaviour
             && Mathf.Approximately(stats.Poison, lastPoison)
             && Mathf.Approximately(timeOfDay, lastTime)
             && isNight == lastNight) return;
+        // R4: разовая потеря майонеза выше порога — это урон (удар зомби),
+        // а не фоновая утечка или яд. lastMayo здесь ещё СТАРОЕ значение
+        // (обновляется строками ниже), dead не вспыхивает.
+        if (lastMayo >= 0f && !dead)
+        {
+            float drop = lastMayo - stats.Mayo;
+            if (drop > FlashThreshold) FlashDamage(drop);
+        }
         lastMayo = stats.Mayo;
         lastPoison = stats.Poison;
         lastTime = timeOfDay;

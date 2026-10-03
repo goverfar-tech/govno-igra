@@ -47,8 +47,9 @@ public class InventorySlotView : MonoBehaviour,
         UiWidgets.Stretch(slot.countText.rectTransform, 4f);
         slot.countText.fontStyle = FontStyle.Bold;
 
+        // R6: тултип с цифрами — общий билдер ItemTooltipTrigger.BuildText
         var trig = back.gameObject.AddComponent<ItemTooltipTrigger>();
-        trig.GetText = () => slot.shownItem != null ? slot.shownItem.displayName : null;
+        trig.GetText = () => ItemTooltipTrigger.BuildText(slot.shownItem);
         return slot;
     }
 

@@ -47,6 +47,17 @@ public static class UiWidgets
         return img;
     }
 
+    // Полноэкранная вуаль (R4: вспышка урона): растянута на весь
+    // родитель, лучи не ловит. Альфу цвета задаёт вызывающий код
+    // (обычно стартует с 0 и проявляется скриптом).
+    public static Image FullscreenVeil(Transform parent, string name, Color color)
+    {
+        var img = Panel(parent, name, color);
+        Stretch(img.rectTransform, 0f);
+        img.raycastTarget = false;
+        return img;
+    }
+
     // Текст. Raycast выключен по умолчанию: иначе подписи перехватывают
     // драг инвентаря и клики кнопок у родителей.
     public static Text Text(Transform parent, string name, int fontSize,

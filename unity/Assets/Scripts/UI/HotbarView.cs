@@ -79,9 +79,9 @@ public class HotbarView : MonoBehaviour
         key.text = (index + 1).ToString();
         key.color = new Color(1f, 1f, 1f, 0.35f);
 
-        // тултип с именем предмета (иконка имя не дублирует)
+        // тултип по предмету: имя + эффекты с цифрами (R6)
         var trig = back.gameObject.AddComponent<ItemTooltipTrigger>();
-        trig.GetText = () => r.shownItem != null ? r.shownItem.displayName : null;
+        trig.GetText = () => ItemTooltipTrigger.BuildText(r.shownItem);
         return r;
     }
 

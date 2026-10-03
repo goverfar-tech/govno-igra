@@ -153,7 +153,10 @@ public class CraftPanel : MonoBehaviour
         crt0.pivot = new Vector2(0f, 0.5f);
         crt0.anchoredPosition = new Vector2(9f, 0f);
         crt0.sizeDelta = new Vector2(44f, 44f);
-        cell.raycastTarget = false;
+        // R6: ячейка ловит луч — на ней висит тултип со статами результата
+        cell.raycastTarget = true;
+        var resTrig = cell.gameObject.AddComponent<ItemTooltipTrigger>();
+        resTrig.GetText = () => ItemTooltipTrigger.BuildText(recipe.result);
 
         var icon = UiWidgets.Panel(cell.transform, "Icon", Color.white);
         UiWidgets.Stretch(icon.rectTransform, 3f);

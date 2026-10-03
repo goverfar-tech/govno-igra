@@ -1,11 +1,17 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-// Тултип с именем предмета над слотом (наведение мышью).
+// Тултип предмета над слотом (наведение мышью).
+// R6: многострочный (имя + эффекты с цифрами), высота панели
+// пересчитывается под число строк при каждом Show.
 // Статический сервис: единственная вьюшка на HudCanvas, создаётся
 // Hud'ом через Init; триггеры слотов дёргают Show/Hide.
 public static class TooltipService
 {
+    const float PanelWidth = 240f;
+    const float LineHeight = 16f; // fontSize 13 + межстрочный запас
+    const float PaddingY = 10f;   // суммарные поля сверху+снизу
+
     static RectTransform panelRt;
     static Text label;
 
@@ -16,7 +22,8 @@ public static class TooltipService
         panelRt = (RectTransform)back.transform;
         panelRt.pivot = new Vector2(0.5f, 0f);
         panelRt.anchorMin = panelRt.anchorMax = new Vector2(0f, 0f);
-        panelRt.sizeDelta = new Vector2(240f, 30f);
+        // высота стартовая (одна строка); реальная — в Show под текст
+        panelRt.sizeDelta = new Vector2(PanelWidth, LineHeight + PaddingY);
         back.raycastTarget = false;
 
         label = UiWidgets.Text(panelRt, "Text", 13);
@@ -30,6 +37,14 @@ public static class TooltipService
         if (panelRt == null || anchor == null) return;
         if (string.IsNullOrEmpty(text)) return;
         label.text = text;
+
+        // высота под содержимое: считаем строки по '\n'
+        // (переносов по ширине нет — у label horizontalOverflow = Overflow)
+        int lines = 1;
+        for (int i = 0; i < text.Length; i++)
+            if (text[i] == '\n') lines++;
+        panelRt.sizeDelta = new Vector2(PanelWidth, lines * LineHeight + PaddingY);
+
         panelRt.gameObject.SetActive(true);
         // верхняя грань слота в экранных пикселях (overlay: world == screen)
         var corners = new Vector3[4];

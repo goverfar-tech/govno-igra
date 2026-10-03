@@ -227,7 +227,8 @@ public class Player : MonoBehaviour
         GameEvents.RaiseInventoryChanged();
         inv.Select(0);
 
-        foreach (var z in FindObjectsByType<Zombie>()) Destroy(z.gameObject);
+        foreach (var z in FindObjectsByType<Zombie>(FindObjectsSortMode.None))
+            Destroy(z.gameObject);
 
         Teleport(hasCampfireSpawn ? lastCampfirePos + Vector3.up * 0.6f : spawnPos);
         Stats.SetState(Stats.maxMayo * 0.5f, 0f); // полведра; сбросит IsDead,

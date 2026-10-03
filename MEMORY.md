@@ -313,6 +313,18 @@ meat-patty/jar — лицензии в Models/CREDITS-food.md; у костра �
 суток, дрейф облаков cloudDrift. Мясо: MakeWhiteModel клонирует
 GLB в белый майонезный материал (Prefabs/Items/meat-mayo.prefab)
 — плоть в этом мире майонезная (автор).
+ФИКС НЕБА/МЯСА (2026-10-03, по плейтесту: фиолетовые солнце/луна/мясо,
+облака пропали): SkyUnlit.shader хранится ТЕКСТОМ исходника —
+EnsureSkyShader пишет File.WriteAllText и проверяет
+ShaderUtil.ShaderHasError; прежний CreateShaderAsset+CreateAsset
+сохранял сериализованный Shader-объект, который ShaderImporter при
+переимпорте спарсить не мог («Parse error line 1» в Editor.log).
+MakeWhiteModel — Object.Instantiate вместо PrefabUtility.InstantiatePrefab:
+инстанс сохранялся ВАРИАНТОМ, подменённый материал терялся
+({fileID: 0}) → мясо без материала. Ассеты неба (Assets/Shaders/,
+Assets/Textures/) докоммичены — раньше существовали только в рабочей
+копии. Лог-ошибки CS0104/CS0103 в Editor.log — от промежуточного
+состояния до using System.IO, в HEAD не воспроизводятся.
 ТЕЛО ИГРАКА (2026-10-03): майонезное ведро «курочка яба» —
 poly.pizza Paint Bucket (CC-BY 4.0, Don Carson; атрибуция и список
 правок в Models/CREDITS-food.md). Этикетка запечена в GLB (UV панели

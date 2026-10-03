@@ -721,17 +721,23 @@ Shader ""Sky/SkyUnlit"" {
     Fallback Off
 }";
 
-    // Шейдер неба без тумана: компилируем из строки и сохраняем ассетом.
+    // Шейдер неба храним ТЕКСТОМ исходника: прошлый вариант
+    // (ShaderUtil.CreateShaderAsset + CreateAsset) записывал в .shader
+    // сериализованный Shader-объект — в той же сессии он работал, но при
+    // следующем переимпорте ShaderImporter парсил файл как исходник и
+    // падал (parse error line 1): солнце/луна/облака становились
+    // фиолетовыми после перезапуска редактора. Текст импортируется всегда.
     static Shader EnsureSkyShader()
     {
         const string path = "Assets/Shaders/SkyUnlit.shader";
-        var existing = AssetDatabase.LoadAssetAtPath<Shader>(path);
-        if (existing != null) return existing;
         EnsureFolder("Assets/Shaders");
-        Shader shader;
-        try { shader = ShaderUtil.CreateShaderAsset(SkyShaderSource, false); }
-        catch (System.ArgumentException) { shader = ShaderUtil.CreateShaderAsset(SkyShaderSource); }
-        AssetDatabase.CreateAsset(shader, path);
+        if (!File.Exists(path)
+            || !File.ReadAllText(path).TrimStart().StartsWith("Shader"))
+            File.WriteAllText(path, SkyShaderSource);
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+        var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+        if (shader == null || ShaderUtil.ShaderHasError(shader))
+            Debug.LogError("[Survival] SkyUnlit.shader не скомпилировался — солнце/луна/облака будут фиолетовыми. Текст ошибки в Console выше.");
         return shader;
     }
 
@@ -850,8 +856,11 @@ Shader ""Sky/SkyUnlit"" {
     {
         var src = LoadModel(glbName);
         if (src == null) return null;
-        var go = PrefabUtility.InstantiatePrefab(src) as GameObject;
-        if (go == null) go = Object.Instantiate(src);
+        // Обычный клон, НЕ PrefabUtility.InstantiatePrefab: инстанс GLB
+        // сохраняется как ВАРИАНТ, а подменённый материал (не ассет)
+        // сериализуется в модификации ссылкой {fileID: 0} — рендерер
+        // оставался без материала, и мясо было фиолетовым.
+        var go = Object.Instantiate(src);
         foreach (var r in go.GetComponentsInChildren<Renderer>())
         {
             var m = new Material(Shader.Find("Standard"));

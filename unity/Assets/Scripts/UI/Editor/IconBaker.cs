@@ -31,7 +31,10 @@ public static class IconBaker
             var model = item.worldModel != null ? item.worldModel : item.placeablePrefab;
             if (model == null)
             {
-                skipped.AppendLine($"— {item.id}: нет worldModel, остаётся текст в слоте");
+                // нет 3D-модели (мясо/яйцо/майонез) — рисуем плейсхолдер:
+                // цветная плитка с цветом по имени, слот не пустой
+                if (BakePlaceholder(item.id, item.displayName)) baked++;
+                else skipped.AppendLine($"— {item.id}: плейсхолдер не записан");
                 continue;
             }
             if (Bake(item.id, model)) baked++;
@@ -126,6 +129,12 @@ public static class IconBaker
             rt.Release();
         }
 
+        return ImportSprite(id);
+    }
+
+    // Настройка PNG как спрайта — общий хвост для 3D-бейка и плейсхолдера.
+    static bool ImportSprite(string id)
+    {
         string spritePath = $"{IconsFolder}/{id}.png";
         AssetDatabase.ImportAsset(spritePath, ImportAssetOptions.ForceSynchronousImport);
         var ti = AssetImporter.GetAtPath(spritePath) as TextureImporter;
@@ -148,6 +157,43 @@ public static class IconBaker
         ti.maxTextureSize = Size;
         ti.SaveAndReimport();
         return true;
+    }
+
+    // Плейсхолдер для предметов без 3D-модели: скруглённая плитка
+    // с цветом по имени (чистая попиксельная отрисовка — без GUI/камер,
+    // детерминированно в любом контексте вызова).
+    static bool BakePlaceholder(string id, string displayName)
+    {
+        var tex = new Texture2D(Size, Size, TextureFormat.RGBA32, false, false);
+        float hue = (Mathf.Abs(displayName.GetHashCode()) % 360) / 360f;
+        var baseCol = Color.HSVToRGB(hue, 0.38f, 0.72f);
+        var px = new Color32[Size * Size];
+        const float margin = 0.08f;   // поля до края
+        const float radius = 0.16f;   // скругление углов
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                // SDF скруглённого квадрата в UV 0..1
+                float u = (float)x / (Size - 1), v = (float)y / (Size - 1);
+                var p = new Vector2(Mathf.Abs(u - 0.5f), Mathf.Abs(v - 0.5f));
+                var b = new Vector2(0.5f - margin, 0.5f - margin);
+                var q = p - b + new Vector2(radius, radius);
+                float d = new Vector2(Mathf.Max(q.x, 0f), Mathf.Max(q.y, 0f)).magnitude
+                          + Mathf.Min(Mathf.Max(q.x, q.y), 0f) - radius;
+                float a = Mathf.Clamp01(0.5f - d * Size * 0.5f);
+                // лёгкая вертикальная тень — плитка не выглядит плоской
+                var c = baseCol * Mathf.Lerp(0.82f, 1.12f, v);
+                px[y * Size + x] = Color32.Lerp(new Color32(0, 0, 0, 0), (Color32)c, a);
+            }
+        }
+        tex.SetPixels32(px);
+        tex.Apply();
+
+        string absPng = Application.dataPath + $"/Resources/Icons/{id}.png";
+        File.WriteAllBytes(absPng, tex.EncodeToPNG());
+        Object.DestroyImmediate(tex);
+        return ImportSprite(id);
     }
 
     static void MakeLight(Transform parent, Vector3 euler, float intensity)

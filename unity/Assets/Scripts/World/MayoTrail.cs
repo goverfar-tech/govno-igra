@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 // Майонезный след (§9.2 — первая мета-механика): ведро с пробитым дном
 // течёт, точки следа капают за игроком. Бег = сильнее и жирнее след,
 // крадучись (присед) = слабее. Зомби ночью нюхают след (Zombie.Wander).
-// Визуала (пятна-декали) пока нет — отдельным арт-прогоном.
+// Визуал — временные кремовые лужицы-цилиндры, до арт-прогона.
 public class MayoTrail : MonoBehaviour
 {
     public static MayoTrail Instance { get; private set; }
@@ -31,17 +32,38 @@ public class MayoTrail : MonoBehaviour
 
     readonly List<TrailPoint> points = new List<TrailPoint>();
     Player player;
+    CharacterController playerCc;   // кэш — не дёргать GetComponent каждый кадр
+    float playerSearchRetry;        // перепоиск игрока не чаще раза в секунду
     Vector3 lastDropPos;
     Material spotMat;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
+        // Первичный спавн. При перезагрузке сцены Boot бежит снова, но
+        // Instance уже живёт (DontDestroyOnLoad) — дубля не будет.
         if (Instance == null)
             new GameObject("MayoTrail").AddComponent<MayoTrail>();
     }
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        // Синглтон-гвард + DontDestroyOnLoad: без этого объект умирал
+        // вместе со стартовой сценой, Boot новый НЕ создавал (Instance
+        // висел протухшей ссылкой) — и след был мёртв до конца сессии:
+        // зомби не нюхали, пятна не капали.
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+
+    void OnEnable() => SceneManager.sceneLoaded += OnSceneLoaded;
+    void OnDisable() => SceneManager.sceneLoaded -= OnSceneLoaded;
+
     void OnDestroy()
     {
         if (Instance == this) Instance = null;
@@ -50,12 +72,27 @@ public class MayoTrail : MonoBehaviour
         points.Clear();
     }
 
+    // Новая сцена — новый мир: старые точки (и лужицы) не должны пахнуть
+    // в нём, а ссылка на Player протухла вместе со старой сценой.
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        foreach (var p in points)
+            if (p.spot != null) Destroy(p.spot);
+        points.Clear();
+        player = null;
+        playerCc = null;
+    }
+
     void Update()
     {
         if (player == null)
         {
+            // перепоиск протухшей ссылки — раз в секунду, не каждый кадр
+            if (Time.time < playerSearchRetry) return;
+            playerSearchRetry = Time.time + 1f;
             player = FindFirstObjectByType<Player>();
-            return;
+            if (player == null) return;
+            playerCc = player.GetComponent<CharacterController>();
         }
 
         // выметаем протухшее (пятна уходят вместе с запахом)
@@ -63,16 +100,23 @@ public class MayoTrail : MonoBehaviour
         for (int i = points.Count - 1; i >= 0; i--)
             if (now - points[i].time > lifeSec) RemovePoint(i);
 
-        var cc = player.GetComponent<CharacterController>();
-        if (cc == null) return;
+        var cc = playerCc;
+        if (cc == null)
+        {
+            playerCc = cc = player.GetComponent<CharacterController>();
+            if (cc == null) return;
+        }
 
         Vector3 flatVel = cc.velocity; flatVel.y = 0f;
         if (flatVel.magnitude < 0.3f) return;                    // стоим — не течём (почти)
         if (Vector3.Distance(player.transform.position, lastDropPos) < stepDistance) return;
 
-        bool sprinting = Input.GetKey(KeyCode.LeftShift);
-        bool crouching = cc.height < 1.5f;
-        float strength = sprinting ? sprintStrength : crouching ? crouchStrength : 1f;
+        // Публичного IsCrouching у Player нет — выводим присед по высоте
+        // капсулы (порог — середина между стоя/сидя). Присед ВАЖНЕЕ
+        // спринта: Shift+Ctrl — это крадущийся, а не бегущий.
+        bool crouching = cc.height < (player.standHeight + player.crouchHeight) * 0.5f;
+        bool sprinting = !crouching && Input.GetKey(KeyCode.LeftShift);
+        float strength = crouching ? crouchStrength : sprinting ? sprintStrength : 1f;
 
         var tp = new TrailPoint { pos = player.transform.position, strength = strength, time = now };
         tp.spot = SpawnSpot(tp.pos, strength);

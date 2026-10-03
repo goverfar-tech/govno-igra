@@ -13,29 +13,54 @@ public class DayNight : MonoBehaviour
     [Range(0f, 1f)]
     public float timeOfDay;           // 0..1
     bool wasNight;
+    float lastSentT = -1f;            // троттлинг TimeOfDayChanged
+    bool lastSentNight;
 
-    void Awake() { timeOfDay = startTime; }
+    void Awake()
+    {
+        timeOfDay = startTime;
+        // Кривой интервал (nightStart <= dayStart) даёт деление почти на
+        // ноль и вывернутый день — ругаемся один раз и разводим значения.
+        if (nightStart - dayStart < 0.05f)
+        {
+            Debug.LogWarning("[DayNight] nightStart должен быть больше dayStart " +
+                             "минимум на 0.05 — разведено автоматически.");
+            nightStart = dayStart + 0.05f;
+        }
+    }
 
     void Update()
     {
         timeOfDay = (timeOfDay + Time.deltaTime / dayLength) % 1f;
 
         bool isNight = timeOfDay >= nightStart || timeOfDay < dayStart;
+        // высота солнца 0..1 по доле светового дня (интервал > 0.05
+        // гарантирован в Awake — деление безопасно)
+        float intensity = Mathf.Clamp01(
+            Mathf.Sin(Mathf.PI * (timeOfDay - dayStart) / (nightStart - dayStart)));
         if (sun != null)
         {
             // полдень (0.5) — солнце в зените
             float sunAngle = (timeOfDay - dayStart) / (nightStart - dayStart) * 180f;
             sun.transform.rotation = Quaternion.Euler(sunAngle, 170f, 0f);
             // приглушаем солнце ночью
-            float intensity = Mathf.Clamp01(Mathf.Sin(Mathf.PI * (timeOfDay - dayStart) / (nightStart - dayStart)));
             sun.intensity = isNight ? 0.02f : Mathf.Lerp(0.05f, 1.1f, intensity);
-            RenderSettings.ambientIntensity = isNight ? 0.15f : Mathf.Lerp(0.35f, 1f, intensity);
         }
+        // обзор темнеет и без солнца — иначе удалённый источник света
+        // оставлял бы вечный день
+        RenderSettings.ambientIntensity = isNight ? 0.15f : Mathf.Lerp(0.35f, 1f, intensity);
 
         if (isNight && !wasNight) GameEvents.RaiseNotify("Наступила ночь");
         if (!isNight && wasNight) GameEvents.RaiseNotify("Наступил день");
         wasNight = isNight;
 
-        GameEvents.RaiseTimeOfDayChanged(timeOfDay, isNight);
+        // Событие — не каждый кадр, а при сдвиге t на >= 0.001 (≈0.3 с
+        // реального времени) или при смене дня/ночи (фронт не теряется).
+        if (isNight != lastSentNight || Mathf.Abs(timeOfDay - lastSentT) >= 0.001f)
+        {
+            lastSentT = timeOfDay;
+            lastSentNight = isNight;
+            GameEvents.RaiseTimeOfDayChanged(timeOfDay, isNight);
+        }
     }
 }

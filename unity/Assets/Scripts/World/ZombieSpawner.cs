@@ -19,14 +19,21 @@ public class ZombieSpawner : MonoBehaviour
 
     void OnTime(float t, bool night)
     {
-        // Событие идёт КАЖДЫЙ кадр — спавним только на фронте ночи,
+        // Событие идёт регулярно — спавним только на фронте ночи,
         // иначе за ночь заспавнятся тысячи.
         if (!night) { wasNight = false; return; }
         if (wasNight) return;
-        wasNight = true;
 
         var player = FindFirstObjectByType<Player>();
-        if (player == null) return;
+        if (player == null)
+        {
+            // Фронт НЕ отработан: wasNight остаётся false, следующее
+            // событие повторит попытку. Раньше фронт глотался без спавна —
+            // и вся ночь была пустая.
+            return;
+        }
+        wasNight = true;
+
         alive.RemoveAll(z => z == null);
         int cap = Mathf.Max(perNight * 2, 6); // предохранитель от нашествия
         int toSpawn = Mathf.Min(perNight, cap - alive.Count);
@@ -34,16 +41,43 @@ public class ZombieSpawner : MonoBehaviour
 
         for (int i = 0; i < toSpawn; i++)
         {
-            float ang = Random.value * Mathf.PI * 2f;
-            float r = Random.Range(minDist, maxDist);
-            var pp = player.transform.position;
-            float x = pp.x + Mathf.Cos(ang) * r, z = pp.z + Mathf.Sin(ang) * r;
-            // не вылезти за карту
-            x = Mathf.Clamp(x, -95f, 95f);
-            z = Mathf.Clamp(z, -95f, 95f);
-            SpawnZombie(new Vector3(x, TerrainGen.HeightAt(x, z) + 1f, z));
+            if (TryFindSpawn(player.transform.position, out var pos))
+                SpawnZombie(pos);
+            else
+                Debug.Log("[ZombieSpawner] чистой точки за 8 попыток не нашлось — зомби пропущен");
         }
         GameEvents.RaiseNotify("Из тумана доносится чавканье…");
+    }
+
+    // До 8 попыток: случайный угол + радиус в кольце, клэмп к карте.
+    // Бракуем точки: ближе minDist к игроку ПОСЛЕ клэмпа (у края карты
+    // клэмп притягивает), в озере/на отмели, в пересечении с деревом/камнем.
+    bool TryFindSpawn(Vector3 pp, out Vector3 pos)
+    {
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            float ang = Random.value * Mathf.PI * 2f;
+            float r = Random.Range(minDist, maxDist);
+            float x = Mathf.Clamp(pp.x + Mathf.Cos(ang) * r, -95f, 95f);
+            float z = Mathf.Clamp(pp.z + Mathf.Sin(ang) * r, -95f, 95f);
+
+            // фактическая дистанция после клэмпа
+            if (Vector2.Distance(new Vector2(x, z), new Vector2(pp.x, pp.z)) < minDist)
+                continue;
+            // не в озере и не на отмели у воды
+            if (Vector2.Distance(new Vector2(x, z), TerrainGen.LakeCenter)
+                < TerrainGen.LakeRadius + 2f)
+                continue;
+
+            pos = new Vector3(x, TerrainGen.HeightAt(x, z) + 1f, z);
+            // тело зомби не должно пересекать ствол/камень/бокс озера
+            if (Physics.CheckCapsule(pos + Vector3.up * 0.5f, pos + Vector3.up * 1.6f,
+                    0.35f, ~0, QueryTriggerInteraction.Ignore))
+                continue;
+            return true;
+        }
+        pos = default;
+        return false;
     }
 
     void SpawnZombie(Vector3 pos)

@@ -25,9 +25,17 @@ public class Zombie : MonoBehaviour
     Vector3 lastKnown;          // где видели игрока в последний раз
     float searchTimer;          // сколько ещё «отслеживаем» после потери из виду
     const float SearchTime = 8f;
+    const float MinAggroTime = 5f; // форсированный агр по урону — не короче
     CharacterController cc;
     Player player;
+    float playerSearchRetry;    // повторный поиск игрока не чаще раза в секунду
     bool isNight;
+
+    // антизастревание: меряем смещение при активном движении
+    float stuckTimer = -1f;     // <0 — контрольная точка не взведена
+    Vector3 stuckRef;
+    float detourTimer;          // >0 — идём боковым обходом
+    Vector3 detourTarget;
 
     enum State { Idle, Wander, Chase, Attack }
     State state = State.Idle;
@@ -49,13 +57,26 @@ public class Zombie : MonoBehaviour
 
     void Update()
     {
+        // гравитация — всегда, до любых ранних выходов (раньше ранний
+        // return при отсутствии игрока оставлял зомби висеть в воздухе)
+        cc.Move(Physics.gravity * Time.deltaTime);
+
         if (player == null)
         {
-            player = FindFirstObjectByType<Player>();
+            // ссылка протухает (старт сцены, загрузка сохранения) —
+            // ищем заново, но не чаще раза в секунду
+            if (Time.time >= playerSearchRetry)
+            {
+                playerSearchRetry = Time.time + 1f;
+                player = FindFirstObjectByType<Player>();
+            }
             if (player == null) { Wander(); return; }
         }
 
-        float dist = Vector3.Distance(transform.position, player.transform.position);
+        // Дистанции — строго по горизонтали: 3D-дистанция на склонах
+        // «докидывала» разницу высот, и зомби не дотягивался до атаки.
+        Vector3 toPlayer = player.transform.position - transform.position;
+        float dist = new Vector2(toPlayer.x, toPlayer.z).magnitude;
         cooldown -= Time.deltaTime;
 
         switch (state)
@@ -65,53 +86,92 @@ public class Zombie : MonoBehaviour
                 // преследование начинается с ЗРЕНИЯ (LOS), не по следу
                 if (dist < noticeRange && isNight && CanSeePlayer())
                 {
-                    state = State.Chase;
-                    lastKnown = player.transform.position;
-                    searchTimer = SearchTime;
+                    EnterChase();
                     break;
                 }
                 Wander();
                 break;
             case State.Chase:
+            {
                 if (dist < attackRange) { state = State.Attack; break; }
+                Vector3 moveTarget;
                 if (CanSeePlayer())
                 {
                     lastKnown = player.transform.position;
                     searchTimer = SearchTime;
-                    MoveTowards(player.transform.position, chaseSpeed);
-                    break;
+                    moveTarget = player.transform.position;
                 }
-                // потерял из виду: к последней точке, по пути «отслеживаем»
-                // свежий след (ограниченное время), потом сдаёмся
-                searchTimer -= Time.deltaTime;
-                if (searchTimer <= 0f) { state = State.Wander; break; }
-                if (MayoTrail.Instance != null &&
-                    MayoTrail.Instance.FreshestNear(transform.position, 20f, out var scent))
-                    lastKnown = scent;
-                MoveTowards(lastKnown, chaseSpeed);
+                else
+                {
+                    // потерял из виду: к последней точке, по пути «отслеживаем»
+                    // свежий след (ограниченное время), потом сдаёмся
+                    searchTimer -= Time.deltaTime;
+                    if (searchTimer <= 0f) { state = State.Wander; ResetUnstick(); break; }
+                    if (MayoTrail.Instance != null &&
+                        MayoTrail.Instance.FreshestNear(transform.position, 20f, out var scent))
+                        lastKnown = scent;
+                    moveTarget = lastKnown;
+                }
+                // застрял о ствол/камень — боковой обход ±2 м примерно на секунду
+                if (detourTimer > 0f)
+                {
+                    detourTimer -= Time.deltaTime;
+                    moveTarget = detourTarget;
+                }
+                else if (TrackStuck())
+                {
+                    Vector3 flat = moveTarget - transform.position; flat.y = 0f;
+                    if (flat.sqrMagnitude > 0.01f)
+                    {
+                        float side = Random.value < 0.5f ? 1f : -1f;
+                        detourTarget = moveTarget
+                            + Vector3.Cross(Vector3.up, flat.normalized) * (2f * side);
+                        detourTimer = 1f;
+                        moveTarget = detourTarget;
+                    }
+                }
+                MoveTowards(moveTarget, chaseSpeed);
                 break;
+            }
             case State.Attack:
                 if (dist > attackRange * 1.3f) { state = State.Chase; break; }
                 FaceTo(player.transform.position);
-                if (cooldown <= 0f)
+                ResetUnstick(); // стоим у жертвы по делу — это не застревание
+                if (cooldown <= 0f && dist < attackRange)
                 {
-                    cooldown = attackCooldown;
-                    player.Stats.Damage(attackDamage);
-                    GameEvents.RaiseNotify("Зомби выбивает майонез! -" + attackDamage);
+                    // не бить сквозь ствол/камень; вплотную к тонкому
+                    // препятствию (ближе половины радиуса) — бить и так
+                    if (dist < attackRange * 0.5f || CanSeePlayer())
+                    {
+                        cooldown = attackCooldown;
+                        player.Stats.Damage(attackDamage);
+                        AudioManager.GruntAt(transform.position, 0f); // удар — рык погромче
+                        GameEvents.RaiseNotify("Зомби выбивает майонез! -" + attackDamage);
+                    }
                 }
                 break;
         }
-
-        // гравитация
-        cc.Move(Physics.gravity * Time.deltaTime);
     }
 
-    // Зрение: луч до игрока, триггеры и свои части не мешают.
+    // Переход в погоню с вскриком (единая точка — звук не задваивается).
+    void EnterChase()
+    {
+        state = State.Chase;
+        lastKnown = player.transform.position;
+        searchTimer = SearchTime;
+        AudioManager.GruntAt(transform.position); // вскрик засечения
+    }
+
+    // Зрение: луч от головы зомби к ГРУДИ игрока. Пивот игрока — середина
+    // его капсулы (cc.center = 0, см. Setup), прежняя цель +1.4 летела НАД
+    // макушкой капсулы — луч не цеплял контроллер, и зомби были слепы.
+    // Триггеры луч игнорирует, собственная капсула не считается (старт
+    // изнутри), а ствол/камень/холм между = не видит.
     bool CanSeePlayer()
     {
         if (player == null) return false;
-        Vector3 from = transform.position + Vector3.up * 1.5f;
-        Vector3 to = player.transform.position + Vector3.up * 1.4f;
+        Vector3 from = transform.position + Vector3.up * 1.5f;        // голова
+        Vector3 to = player.transform.position + Vector3.up * 0.35f;  // грудь
         Vector3 dir = to - from;
         if (Physics.Raycast(from, dir, out var hit, dir.magnitude + 0.5f,
                 ~0, QueryTriggerInteraction.Ignore))
@@ -119,8 +179,37 @@ public class Zombie : MonoBehaviour
         return false;
     }
 
+    // Антизастревание: за ~1.5 с «движения» смещение < 0.3 м — упёрлись.
+    bool TrackStuck()
+    {
+        if (stuckTimer < 0f)
+        {
+            stuckTimer = 0f;
+            stuckRef = transform.position;
+            return false;
+        }
+        stuckTimer += Time.deltaTime;
+        if (stuckTimer < 1.5f) return false;
+        Vector3 moved = transform.position - stuckRef; moved.y = 0f;
+        stuckTimer = -1f; // на следующем кадре движения перевзведётся само
+        return moved.magnitude < 0.3f;
+    }
+
+    void ResetUnstick()
+    {
+        stuckTimer = -1f;
+        detourTimer = 0f;
+    }
+
     void Wander()
     {
+        // застрял — немедленный репик цели
+        if (TrackStuck())
+        {
+            repickTarget = 0f;
+            wanderTarget = transform.position;
+        }
+
         // нюх: ночью зомби тянет к свежему майонезному следу (§9.2)
         sniffTimer -= Time.deltaTime;
         if (isNight && sniffTimer <= 0f)
@@ -138,7 +227,7 @@ public class Zombie : MonoBehaviour
         }
 
         repickTarget -= Time.deltaTime;
-        if (repickTarget <= 0f || Vector3.Distance(transform.position, wanderTarget) < 1f)
+        if (repickTarget <= 0f || HorizontalDist(wanderTarget) < 1f)
         {
             repickTarget = 6f;
             float ang = Random.value * Mathf.PI * 2f;
@@ -149,6 +238,12 @@ public class Zombie : MonoBehaviour
             state = State.Wander;
         }
         MoveTowards(wanderTarget, walkSpeed);
+    }
+
+    float HorizontalDist(Vector3 target)
+    {
+        Vector3 d = target - transform.position;
+        return new Vector2(d.x, d.z).magnitude;
     }
 
     void MoveTowards(Vector3 target, float speed)
@@ -177,17 +272,27 @@ public class Zombie : MonoBehaviour
     {
         hp -= dmg;
         GameEvents.RaiseNotify($"Зомби получает {dmg:F0} урона");
-        if (player != null && state < State.Chase)
+        if (player != null)
         {
-            // удар «в морду» — видим жертву, даже если стена
-            state = State.Chase;
-            lastKnown = player.transform.position;
-            searchTimer = SearchTime;
+            // Агр по урону — независимо от дня/ночи: удар «выдаёт» жертву,
+            // даже если стена между. Форсируем Chase минимум на 5 с;
+            // свежий агр получает полный SearchTime (8 с).
+            if (state < State.Chase)
+            {
+                EnterChase(); // с вскриком
+            }
+            else
+            {
+                lastKnown = player.transform.position;
+                searchTimer = Mathf.Max(searchTimer, MinAggroTime);
+            }
         }
         if (hp <= 0f)
         {
             if (dropItem != null && pickupPrefab != null)
             {
+                // +0.3 вверх от позиции зомби; посадку на землю делает
+                // сам PickupItem (рейкаст вниз в Start)
                 var drop = Instantiate(pickupPrefab,
                     transform.position + Vector3.up * 0.3f, Quaternion.identity);
                 drop.item = dropItem;

@@ -39,11 +39,7 @@ public class Chicken : MonoBehaviour
         if (repick <= 0f || Vector3.Distance(transform.position, target) < 0.6f)
         {
             repick = Random.Range(3f, 7f);
-            float ang = Random.value * Mathf.PI * 2f;
-            float r = Random.Range(0f, wanderRadius);
-            var p = anchor + new Vector3(Mathf.Cos(ang) * r, 0, Mathf.Sin(ang) * r);
-            p.y = TerrainGen.HeightAt(p.x, p.z) + 0.55f;
-            target = p;
+            target = PickWanderTarget();
         }
 
         Vector3 flat = target - transform.position;
@@ -64,20 +60,49 @@ public class Chicken : MonoBehaviour
         }
     }
 
+    // Цель блуждания: случайная вокруг якоря, но НЕ в озере
+    // (до 5 попыток; не вышло — стоим на месте до следующего репика).
+    Vector3 PickWanderTarget()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            float ang = Random.value * Mathf.PI * 2f;
+            float r = Random.Range(0f, wanderRadius);
+            var p = anchor + new Vector3(Mathf.Cos(ang) * r, 0, Mathf.Sin(ang) * r);
+            if (Vector2.Distance(new Vector2(p.x, p.z), TerrainGen.LakeCenter)
+                < TerrainGen.LakeRadius + 2f)
+                continue;
+            p.y = TerrainGen.HeightAt(p.x, p.z) + 0.55f;
+            return p;
+        }
+        return transform.position; // постоим
+    }
+
     void LayEgg()
     {
         if (eggItem == null || pickupPrefab == null) return;
-        eggs.RemoveAll(e => e == null);
-        if (eggs.Count >= maxEggsAround) return; // фермы не будет
 
+        // Считаем ВСЕ яйца в мире: свой список (почистив null) плюс
+        // любые PickupItem с eggItem — выброшенные игроком тоже в счёт.
+        var seen = new HashSet<GameObject>();
+        int total = 0;
+        eggs.RemoveAll(e => e == null);
+        foreach (var e in eggs)
+            if (seen.Add(e)) total++;
+        foreach (var p in FindObjectsByType<PickupItem>(FindObjectsSortMode.None))
+            if (p.item == eggItem && seen.Add(p.gameObject)) total++;
+        if (total >= maxEggsAround) return; // фермы не будет
+
+        // +0.15 вверх за спиной; посадку на землю делает сам PickupItem
         var egg = Instantiate(pickupPrefab,
-            transform.position + transform.forward * -0.4f + Vector3.up * 0.25f,
+            transform.position + transform.forward * -0.4f + Vector3.up * 0.15f,
             Quaternion.identity);
         egg.item = eggItem;
         egg.count = 1;
         egg.name = "Egg";
         egg.transform.localScale = Vector3.one * 0.35f; // яйцо, а не бревно
         eggs.Add(egg.gameObject);
+        AudioManager.SquealAt(transform.position); // кудахтанье
     }
 
     // Тело из кубов: spooky-cute курица (§9.1).

@@ -32,6 +32,12 @@ public class Player : MonoBehaviour
     public float sprintFovKick = 1.05f;   // множитель FOV на бегу
 
     float bobPhase, bobOffset, landOffset;
+    // R4: урон ощущается телом (NotifyDamaged) — резкий импульс-кивок
+    // вниз поверх bob/landOffset + короткий yaw-тычок головы.
+    // Оба затухают в LateUpdate и существующие системы не ломают.
+    float hitDip;
+    float shakeTimer, shakeAmp;
+    const float ShakeDuration = 0.22f;
     bool wasGrounded = true;
     float lastFallVel;
     bool isCrouchingSmooth;
@@ -234,6 +240,19 @@ public class Player : MonoBehaviour
         GameEvents.RaiseNotify("Ты очнулся. Вещи остались там, где ты упал.");
     }
 
+    // R4: урон ощущается телом. Зомби зовёт при каждом попадании.
+    // Резкий dips-импульс вниз (как проседание при приземлении, но с
+    // экспоненциальным затуханием и жёстче) + случайный yaw-тычок головы
+    // на пару кадров. Масштаб от силы удара: ~20 урона = полный кивок.
+    public void NotifyDamaged(float amount)
+    {
+        // повторные удары подряд складываются, но не уводят голову в пол
+        hitDip = Mathf.Max(hitDip - 0.18f * Mathf.Clamp01(amount / 20f), -0.3f);
+        shakeTimer = ShakeDuration;
+        float side = Random.value < 0.5f ? -1f : 1f;
+        shakeAmp = side * Mathf.Lerp(3f, 8f, Mathf.Clamp01(amount / 20f));
+    }
+
     void LateUpdate()
     {
         if (head == null) return;
@@ -256,7 +275,22 @@ public class Player : MonoBehaviour
         // голова: высота следует за плавной капсулой + bob + проседание
         float heightT = Mathf.InverseLerp(crouchHeight, standHeight, cc.height);
         float headY = Mathf.Lerp(baseHeadY * 0.62f, baseHeadY, heightT);
-        head.localPosition = new Vector3(0f, headY + bobOffset + landOffset, 0f);
+        // импульс урона (R4): экспоненциальное затухание, складывается
+        // с bob/landOffset — своих не трогает
+        hitDip = Mathf.Lerp(hitDip, 0f, 1f - Mathf.Exp(-6f * Time.deltaTime));
+        head.localPosition = new Vector3(0f, headY + bobOffset + landOffset + hitDip, 0f);
+
+        // yaw-тычок от урона: Look() ставит yaw=0 каждый кадр в Update,
+        // трясём поверх здесь (LateUpdate — после). По окончании явно
+        // возвращаем 0, чтобы при открытом UI (Look не зовётся) голова
+        // не осталась довёрнутой.
+        if (shakeTimer > 0f)
+        {
+            shakeTimer -= Time.deltaTime;
+            float t = Mathf.Clamp01(shakeTimer / ShakeDuration);
+            head.localEulerAngles = new Vector3(pitch, shakeAmp * t, 0f);
+            if (shakeTimer <= 0f) head.localEulerAngles = new Vector3(pitch, 0f, 0f);
+        }
 
         // --- FOV-кик на бегу: базу читаем из GameSettings, не перезаписываем ---
         if (cam != null && GameSettings.Fov > 1f)
@@ -343,8 +377,10 @@ public class Player : MonoBehaviour
         if (Physics.Raycast(cam.position, cam.forward, out var info, interactRange, interactMask))
             hit = info.collider.GetComponentInParent<IInteractable>();
 
-        // подсказка пересылается и при смене цели, и при смене текста
-        // (после удара по узлу «Добыть (2/3)» должно обновиться)
+        // GetPrompt зовём КАЖДЫЙ кадр: подсказки живые (R5 — прогресс
+        // готовки у костра «Жарим… N%», после удара по узлу «Добыть
+        // (2/3)» и т.п.). Событие летит только при реальной смене
+        // строки или цели — иначе Hud перерисовывался бы зря.
         string newPrompt = hit?.GetPrompt();
         if (!ReferenceEquals(hit, focus) || newPrompt != lastPrompt)
         {

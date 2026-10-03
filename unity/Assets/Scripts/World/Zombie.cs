@@ -36,6 +36,7 @@ public class Zombie : MonoBehaviour
     Vector3 stuckRef;
     float detourTimer;          // >0 — идём боковым обходом
     Vector3 detourTarget;
+    int blockedHits;            // подряд удары, глухо ушедшие в постройку (R4)
 
     enum State { Idle, Wander, Chase, Attack }
     State state = State.Idle;
@@ -143,17 +144,52 @@ public class Zombie : MonoBehaviour
                 break;
             }
             case State.Attack:
-                if (dist > attackRange * 1.3f) { state = State.Chase; break; }
+                if (dist > attackRange * 1.3f) { state = State.Chase; blockedHits = 0; break; }
                 FaceTo(player.transform.position);
+                // принудительный обход: удары дважды ушли в стену (R4) —
+                // идём боком ~1 с; отойдём достаточно далеко — и обычный
+                // unstick в Chase подхватит
+                if (detourTimer > 0f)
+                {
+                    detourTimer -= Time.deltaTime;
+                    MoveTowards(detourTarget, chaseSpeed);
+                    break;
+                }
                 ResetUnstick(); // стоим у жертвы по делу — это не застревание
                 if (cooldown <= 0f && dist < attackRange)
                 {
+                    // стены имеют смысл: постройка игрока (Placed) на линии
+                    // удара глушит урон ПОЛНОСТЬЮ, даже вплотную. Зомби
+                    // лупит по стене с тем же кулдауном; 2 промаха подряд —
+                    // принудительный боковой обход (база держится
+                    // планировкой, как в 7DtD-ритме §9.1)
+                    if (BlockedByPlaced(out var wallHit))
+                    {
+                        cooldown = attackCooldown; // замах ушёл в стену
+                        blockedHits++;
+                        AudioManager.HitAt(wallHit.point); // глухой «тук» слышен жертве
+                        if (blockedHits >= 2)
+                        {
+                            blockedHits = 0;
+                            Vector3 flat = player.transform.position - transform.position;
+                            flat.y = 0f;
+                            if (flat.sqrMagnitude > 0.01f)
+                            {
+                                float side = Random.value < 0.5f ? 1f : -1f;
+                                detourTarget = player.transform.position
+                                    + Vector3.Cross(Vector3.up, flat.normalized) * (2f * side);
+                                detourTimer = 1f;
+                            }
+                        }
+                    }
                     // не бить сквозь ствол/камень; вплотную к тонкому
                     // препятствию (ближе половины радиуса) — бить и так
-                    if (dist < attackRange * 0.5f || CanSeePlayer())
+                    else if (dist < attackRange * 0.5f || CanSeePlayer())
                     {
                         cooldown = attackCooldown;
+                        blockedHits = 0;
                         player.Stats.Damage(attackDamage);
+                        player.NotifyDamaged(attackDamage); // R4: тряска камеры жертвы
                         AudioManager.GruntAt(transform.position, 0f); // удар — рык погромче
                         GameEvents.RaiseNotify("Зомби выбивает майонез! -" + attackDamage);
                     }
@@ -185,6 +221,20 @@ public class Zombie : MonoBehaviour
         if (Physics.Raycast(from, dir, out var hit, dir.magnitude + 0.5f,
                 ~0, QueryTriggerInteraction.Ignore))
             return hit.collider.GetComponentInParent<Player>() != null;
+        return false;
+    }
+
+    // Между нами и игроком постройка (Placed)? Стена/костёр глушат урон
+    // полностью, даже вплотную (R4: «стены имеют смысл»). Луч тот же,
+    // что у зрения: голова → грудь. Ствол/холм/куст урону не мешают —
+    // только то, что построил игрок.
+    bool BlockedByPlaced(out RaycastHit wallHit)
+    {
+        Vector3 from = transform.position + Vector3.up * 1.5f;        // голова
+        Vector3 to = player.transform.position + Vector3.up * 0.35f;  // грудь
+        if (Physics.Linecast(from, to, out wallHit, ~0,
+                QueryTriggerInteraction.Ignore))
+            return wallHit.collider.GetComponentInParent<Placed>() != null;
         return false;
     }
 

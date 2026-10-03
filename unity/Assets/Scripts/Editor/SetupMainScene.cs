@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -689,7 +688,7 @@ Shader ""Sky/SkyUnlit"" {
         return shader;
     }
 
-    static Texture2D EnsureTexture(string path, Func<Color32[]> painter, bool repeat = false)
+    static Texture2D EnsureTexture(string path, System.Func<Color32[]> painter, bool repeat = false)
     {
         if (!File.Exists(path))
         {

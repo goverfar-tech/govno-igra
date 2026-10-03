@@ -101,6 +101,19 @@ public static class IconBaker
             tex.Apply();
             RenderTexture.active = null;
 
+            // защита от «пустого» бейка (было: иконка костра прозрачная
+            // целиком — префаб потерял модель, а мы тихо записали пустоту):
+            // нет непрозрачных пикселей — не затираем файл, орём в лог
+            var px = tex.GetPixels32();
+            int opaque = 0;
+            for (int i = 0; i < px.Length; i += 8) if (px[i].a > 24) opaque++;
+            if (opaque < 8)
+            {
+                Object.DestroyImmediate(tex);
+                Debug.LogWarning($"[Survival] «{id}»: кадр пустой (модель без рендереров или вне камеры) — PNG не записан.");
+                return false;
+            }
+
             // File.WriteAllBytes чувствителен к cwd процесса — собираем
             // абсолютный путь от Application.dataPath (…/Assets)
             string absPng = Application.dataPath + $"/Resources/Icons/{id}.png";

@@ -502,14 +502,31 @@ public static class SetupMainScene
         var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
         if (existing != null)
         {
-            // префаб мог быть создан до появления Campfire.cs — довешиваем
-            if (existing.GetComponent<Campfire>() == null)
+            // Префаб мог быть создан раньше без модели (тихий сбой импорта
+            // GLB) или до появления Campfire.cs — чиним оба случая,
+            // иначе костёр невидим в мире и иконка пустая.
+            bool dirty = false;
+            var rootGo = PrefabUtility.LoadPrefabContents(path);
+            if (rootGo.GetComponent<Campfire>() == null)
             {
-                var rootGo = PrefabUtility.LoadPrefabContents(path);
                 rootGo.AddComponent<Campfire>();
-                existing = PrefabUtility.SaveAsPrefabAsset(rootGo, path);
-                PrefabUtility.UnloadPrefabContents(rootGo);
+                dirty = true;
             }
+            if (rootGo.GetComponentInChildren<MeshRenderer>() == null)
+            {
+                var mdl = LoadModel("campfire-pit");
+                if (mdl != null)
+                {
+                    var inst = (GameObject)PrefabUtility.InstantiatePrefab(mdl);
+                    inst.transform.SetParent(rootGo.transform, false);
+                    inst.transform.localScale = Vector3.one * 3.5f;
+                    dirty = true;
+                }
+                else Debug.LogWarning("[Survival] Campfire.prefab без модели, и campfire-pit.glb недоступен.");
+            }
+            if (dirty)
+                existing = PrefabUtility.SaveAsPrefabAsset(rootGo, path);
+            PrefabUtility.UnloadPrefabContents(rootGo);
             return existing;
         }
 

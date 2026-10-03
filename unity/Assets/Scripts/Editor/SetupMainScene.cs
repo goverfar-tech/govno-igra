@@ -125,6 +125,14 @@ public static class SetupMainScene
         var capsuleCol = playerGo.GetComponent<CapsuleCollider>();
         if (capsuleCol != null) Object.DestroyImmediate(capsuleCol);
 
+        // Тело игрока — само майонезное ведро «курочка яба» (§9.1): меш
+        // капсулы-примитива прячем, визуал — GLB-ведро ребёнком ниже.
+        // Коллизии остаются на CharacterController, геймплей не меняется.
+        var capsuleMesh = playerGo.GetComponent<MeshFilter>();
+        if (capsuleMesh != null) Object.DestroyImmediate(capsuleMesh);
+        var capsuleRend = playerGo.GetComponent<MeshRenderer>();
+        if (capsuleRend != null) Object.DestroyImmediate(capsuleRend);
+
         var cc = playerGo.AddComponent<CharacterController>();
         cc.height = 1.8f;
         cc.radius = 0.35f;
@@ -141,6 +149,44 @@ public static class SetupMainScene
         cam.nearClipPlane = 0.05f; // иначе объекты «исчезают» вплотную к камере
         head.AddComponent<AudioListener>();
         player.head = head.transform;
+
+        // --- тело-ведро «курочка яба» (§9.1) ---
+        // Панель этикетки в GLB смотрит в -z, вперёд игрока +z -> разворот
+        // на 180°. Рост ведра 1.2 м: обод на 1.3 м ниже камеры (1.6) и при
+        // прямом взгляде в кадр не лезет, при взгляде вниз видно майонез.
+        var bucketModel = LoadModel("mayo-bucket");
+        if (bucketModel != null)
+        {
+            var bucket = (GameObject)PrefabUtility.InstantiatePrefab(bucketModel);
+            bucket.name = "BucketBody";
+            bucket.transform.SetParent(playerGo.transform, false);
+            bucket.transform.localPosition = new Vector3(0f, -cc.height / 2f, 0f); // дно на земле
+            bucket.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            var rends = bucket.GetComponentsInChildren<Renderer>();
+            if (rends.Length > 0)
+            {
+                var bb = rends[0].bounds;
+                foreach (var r in rends) bb.Encapsulate(r.bounds);
+                if (bb.size.y > 1e-6f) bucket.transform.localScale *= 1.2f / bb.size.y;
+            }
+
+            // Майонез внутри — «шкала здоровья», читается взглядом вниз
+            // (§9.2). Диск без коллайдера, чтобы не путать LOS-лучи зомби
+            // и лучи взаимодействия.
+            var mayoBodyMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Mayo.mat");
+            if (mayoBodyMat == null)
+                mayoBodyMat = CreateMaterial("Mayo", new Color(0.93f, 0.88f, 0.62f));
+            var mayoGo = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var mayoCol = mayoGo.GetComponent<CapsuleCollider>();
+            if (mayoCol != null) Object.DestroyImmediate(mayoCol);
+            mayoGo.name = "MayoInside";
+            mayoGo.transform.SetParent(playerGo.transform, false);
+            mayoGo.transform.localPosition = new Vector3(0f, -cc.height / 2f + 0.9f, 0f);
+            mayoGo.transform.localScale = new Vector3(1.0f, 0.05f, 1.0f); // r=0.5, толщина 0.1 м
+            mayoGo.GetComponent<MeshRenderer>().sharedMaterial = mayoBodyMat;
+        }
+        else
+            missing.AppendLine("player body: mayo-bucket.glb (ведро игрока)");
 
         // --- временный HUD ---
         var hud = new GameObject("DebugHud");

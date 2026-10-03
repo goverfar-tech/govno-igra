@@ -6,3 +6,9 @@
 - meat.glb — «Meat Raw» (poly.pizza/m/Rc1MJPGjsl, CC0)
 - meat-patty.glb — «Meat Patty» (poly.pizza/m/2RbsQBbMGg, CC0) — котлета
 - jar.glb — «Jar» (poly.pizza/m/XGe3q5zQ5s, CC0) — банка домашнего майонеза
+- mayo-bucket.glb — «Paint Bucket» (poly.pizza/m/wOomnJNisB, CC-BY 4.0,
+  автор Don Carson) — тело игрока, ведро «курочка яба». МОДИФИЦИРОВАНО
+  2026-10-03: UV панели-этикетки пересчитаны, на неё запечена текстура
+  «курочка яба» (курочка + надпись, нарисованы кодом), ручка повёрнута
+  назад, рыжий патч на задней стенке перекрашен в цвет красных полос.
+  CC-BY требует атрибуции — этот файл и есть атрибуция.

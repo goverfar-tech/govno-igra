@@ -88,11 +88,16 @@ public class Campfire : MonoBehaviour, IInteractable
             cookTimer -= Time.deltaTime;
             if (cookTimer <= 0f)
             {
-                int leftover = player.Inventory.Add(pendingCook, pendingCount);
+                // мёртвому не скармливаем: жаркое падёт под ноги на месте
+                // гибели (corpse run §9.5 подберёт), а не растворится в трупе
+                int leftover = player.Stats.IsDead
+                    ? pendingCount
+                    : player.Inventory.Add(pendingCook, pendingCount);
                 if (leftover > 0)
                 {
                     player.Inventory.DropAtFeet(pendingCook, leftover);
-                    GameEvents.RaiseNotify("Инвентарь полон — уронил у костра");
+                    if (!player.Stats.IsDead)
+                        GameEvents.RaiseNotify("Инвентарь полон — уронил у костра");
                 }
                 GameEvents.RaiseNotify("Готово: " + pendingCook.displayName);
                 pendingCook = null;

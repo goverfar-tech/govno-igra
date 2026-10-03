@@ -10,20 +10,27 @@ using UnityEngine.SceneManagement;
 public static class SetupHud
 {
     [MenuItem("Survival/Setup HUD")]
-    public static void Run()
+    public static void Run() => Run(quiet: false);
+
+    // quiet: вызов из SetupMainScene — итоговый диалог показывает сам
+    // Setup; без этого Setup гонял три модальных окна подряд
+    // (аудит 2026-10-04).
+    public static void Run(bool quiet)
     {
         if (EditorApplication.isPlaying)
         {
-            EditorUtility.DisplayDialog("Survival",
-                "Сначала выйди из Play-режима, потом запускай Setup.", "Ок");
+            if (!quiet)
+                EditorUtility.DisplayDialog("Survival",
+                    "Сначала выйди из Play-режима, потом запускай Setup.", "Ок");
             return;
         }
 
         var scene = SceneManager.GetActiveScene();
         if (!scene.IsValid() || !scene.isLoaded)
         {
-            EditorUtility.DisplayDialog("Survival",
-                "Нет активной сцены. Открой Assets/Scenes/Main.unity и повтори.", "Ок");
+            if (!quiet)
+                EditorUtility.DisplayDialog("Survival",
+                    "Нет активной сцены. Открой Assets/Scenes/Main.unity и повтори.", "Ок");
             return;
         }
 
@@ -56,8 +63,9 @@ public static class SetupHud
 
         Debug.Log($"[Survival] HUD готов: объект «{hud.gameObject.name}» в сцене {scene.name}, " +
                   $"DebugHud выключено: {disabled}. Жми Play!");
-        EditorUtility.DisplayDialog("Survival",
-            "HUD добавлен в сцену, DebugHud выключен.\nЖми Play и тестируй.", "Ок");
+        if (!quiet)
+            EditorUtility.DisplayDialog("Survival",
+                "HUD добавлен в сцену, DebugHud выключен.\nЖми Play и тестируй.", "Ок");
     }
 
     static T FindInScene<T>(Scene scene) where T : Component

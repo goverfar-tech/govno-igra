@@ -66,6 +66,12 @@ public class Minimap : MonoBehaviour
     void OnDestroy()
     {
         if (instance == this) instance = null;
+        // текстура карты создана кодом — без Destroy висела бы до GC
+        if (mapTexture != null)
+        {
+            Destroy(mapTexture);
+            mapTexture = null;
+        }
     }
 
     // ---------- построение ----------

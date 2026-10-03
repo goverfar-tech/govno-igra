@@ -89,8 +89,17 @@ public class PickupItem : MonoBehaviour, IInteractable
             return;
         }
         // плавная тяга к ногам игрока; сквозь землю не проваливаемся —
-        // рейкаст положил на землю, тянемся горизонтально-верхне
-        transform.position += to.normalized * (magnetSpeed * Time.deltaTime);
+        // рейкаст положил на землю, тянемся горизонтально-верхне.
+        // Сквозь стены тоже не тянем (R4 «стены честные», аудит
+        // 2026-10-04): преграда на линии (стена/камень/контейнер) гасит
+        // тягу — дроп ждёт у преграды, пока игрок не подойдёт. Луч короче
+        // цели на полметра: иначе капсула игрока (r=0.35) блокировала бы
+        // саму себя в последней пяди.
+        var dirTo = to / dist;
+        if (Physics.Raycast(transform.position, dirTo, out _,
+                dist - 0.5f, ~0, QueryTriggerInteraction.Ignore))
+            return;
+        transform.position += dirTo * (magnetSpeed * Time.deltaTime);
     }
 
     void TryAbsorb(Player player)

@@ -96,6 +96,13 @@ public class Player : MonoBehaviour
         spawnPos = transform.position;
         lastDryPos = spawnPos; // спаун на плато — сухая точка по умолчанию
 
+        // Новый мир (рестарт сцены / «Начать заново») — костров в нём ещё
+        // нет. Статику респауна чистим и здесь, а не только на старте
+        // сессии: иначе смерть после рестарта уводила к «призрачному»
+        // костру ПРЕДЫДУЩЕГО мира — в пустое место чужой карты.
+        lastCampfirePos = default;
+        hasCampfireSpawn = false;
+
         // якорь «в руке»: правее-ниже центра экрана, чуть повёрнут внутрь.
         // Вид-модель ребёнок головы — наследует headbob автоматически.
         if (head != null)
@@ -133,7 +140,11 @@ public class Player : MonoBehaviour
     {
         placeCooldown -= Time.deltaTime;
         swingCooldown -= Time.deltaTime;
-        if (Stats.IsDead) return;
+        if (Stats.IsDead)
+        {
+            ClearFocusPrompt();
+            return;
+        }
 
         // Модальный UI (меню/пауза/инвентарь от Hud) блокирует ввод.
         // Событие InventoryOpenChanged могло проскочить до нашей подписки
@@ -143,7 +154,11 @@ public class Player : MonoBehaviour
                            || Cursor.lockState != CursorLockMode.Locked;
         if (!uiOwnsInput) Look();
         Move(uiOwnsInput);
-        if (uiOwnsInput) return;
+        if (uiOwnsInput)
+        {
+            ClearFocusPrompt(); // подсказка не должна висеть под панелью
+            return;
+        }
         UpdateInteractFocus();
 
         if (Input.GetKeyDown(KeyCode.E) && focus != null)
@@ -216,7 +231,13 @@ public class Player : MonoBehaviour
     bool TryPlace(ItemData item)
     {
         if (placeCooldown > 0f) return true;
-        if (item.placeablePrefab == null) return true;
+        if (item.placeablePrefab == null)
+        {
+            // isPlaceable есть, префаб потерян (сбой импорта GLB) —
+            // глотать клик молча нельзя, предмет выглядит сломанным
+            GameEvents.RaiseNotify("Постройка потеряна — поставить нельзя");
+            return true;
+        }
 
         var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
         if (!Physics.Raycast(origin, (head != null ? head.forward : transform.forward),
@@ -451,13 +472,24 @@ public class Player : MonoBehaviour
         // Числа подобраны так, чтобы за отведённые 3.5 с нельзя было
         // выгрести обратно даже прыжками: 0.3 скорости × 3.5 с ≈ 4 м,
         // а до берега от кромки 10+ м.
-        bool inSea = TerrainGen.IsInOcean(transform.position);
-        if (inSea)
+        // Тонем не только за кромкой отмели (IsInOcean): голова под
+        // поверхностью моря (−0.45) тоже включает таймер — раньше полоса
+        // мелководья ~423–428 м была проходима по дну безнаказанно,
+        // граница смерти не совпадала с ватерлинией (аудит 2026-10-04).
+        // Вязкость и гашение прыжка остаются только глубокой воде:
+        // по мелководью ко дну идём ходко, назад выбраться реально.
+        bool deepSea = TerrainGen.IsInOcean(transform.position);
+        bool inSea = deepSea
+            || (head != null && head.position.y < TerrainGen.SeaLevel - 0.45f);
+        if (deepSea)
         {
             dir *= 0.3f; // вязкий майонез: гребки почти впустую
             // майонез держит — тонем плавно, а не камнем;
             // прыжок гасится: выпрыгивать из ведра-в-ведре нечестно
             verticalVel = Mathf.Min(Mathf.Max(verticalVel, -2.5f), 1.2f);
+        }
+        if (inSea)
+        {
             seaTimer += Time.deltaTime;
             if (!seaToastShown && seaTimer >= 0.5f)
             {
@@ -484,6 +516,17 @@ public class Player : MonoBehaviour
 
         bool moving = dir.sqrMagnitude > 0.01f && cc.isGrounded;
         Stats.Tick(Time.deltaTime, sprinting && moving);
+    }
+
+    // Погасить прицельную подсказку (открыт UI / игрок мёртв):
+    // UpdateInteractFocus в это время не зовётся, и последняя строка
+    // иначе оставалась висеть под модальным окном.
+    void ClearFocusPrompt()
+    {
+        if (focus == null && lastPrompt == null) return;
+        focus = null;
+        lastPrompt = null;
+        GameEvents.RaisePromptChanged(null);
     }
 
     void UpdateInteractFocus()

@@ -958,12 +958,13 @@ public static class SetupMainScene
 
         // NewScene(Single) создала сцену без Hud — довешиваем его сразу,
         // чтобы не требовался отдельный запуск меню «Setup HUD»
-        SetupHud.Run();
+        // (quiet: итоговый диалог — один, в конце этого Run)
+        SetupHud.Run(quiet: true);
 
         // Иконки предметов тоже здесь: repair Campfire.prefab обновляет
         // placeablePrefab, иконки должны перепечься в тот же заход —
         // иначе забудется, и слот костра останется пустым навсегда
-        IconBaker.Run();
+        IconBaker.Run(quiet: true);
 
         Debug.Log($"[Survival] Сцена Main собрана и сохранена. Жми Play!");
         string msg = missing.Length == 0

@@ -95,7 +95,7 @@ public class SaveSystem : MonoBehaviour
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.F5)) Save();
-        if (Input.GetKeyDown(KeyCode.F9)) Load();
+        if (Input.GetKeyDown(KeyCode.F9)) Load(fromMenu: false);
     }
 
     void Save()
@@ -155,10 +155,19 @@ public class SaveSystem : MonoBehaviour
 
         try
         {
-            File.WriteAllText(SavePath, JsonUtility.ToJson(data, true));
+            // Атомарная запись: сперва рядом во временный файл, потом
+            // replace. Крэш посреди записи оставит мусорный .tmp, но не
+            // невосстановимо битый save.json (аудит 2026-10-04).
+            string tmp = SavePath + ".tmp";
+            File.WriteAllText(tmp, JsonUtility.ToJson(data, true));
+            if (File.Exists(SavePath)) File.Replace(tmp, SavePath, null);
+            else File.Move(tmp, SavePath);
         }
-        catch (IOException e)
+        catch (System.Exception e) when (e is IOException
+                                        || e is System.UnauthorizedAccessException)
         {
+            // UnauthorizedAccessException — не наследник IOException:
+            // read-only файл/антивирус раньше пролетали мимо тоста
             Debug.LogWarning("SaveSystem: не удалось записать сейв: " + e.Message);
             GameEvents.RaiseNotify("Не удалось сохранить сейв");
             return;
@@ -168,8 +177,17 @@ public class SaveSystem : MonoBehaviour
 
     // false — загрузка не состоялась (нет файла/битый/старая версия/
     // нет игрока): нужно, чтобы меню «Продолжить» не закрывалось впустую.
-    bool Load()
+    // fromMenu: кнопка «Продолжить» зовёт из меню при timeScale 0 — это
+    // штатный путь. Горячий F9 в паузе/меню глушим: мир подменялся бы под
+    // открытым интерфейсом, который считает, что стоит прежний (аудит
+    // 2026-10-04: Save эти проверки имел, Load — нет).
+    bool Load(bool fromMenu)
     {
+        if (!fromMenu && Time.timeScale <= 0f)
+        {
+            GameEvents.RaiseNotify("Сначала вернитесь в игру");
+            return false;
+        }
         if (!File.Exists(SavePath))
         {
             GameEvents.RaiseNotify("Нет сохранения");
@@ -181,7 +199,8 @@ public class SaveSystem : MonoBehaviour
         {
             json = File.ReadAllText(SavePath);
         }
-        catch (IOException e)
+        catch (System.Exception e) when (e is IOException
+                                        || e is System.UnauthorizedAccessException)
         {
             Debug.LogWarning("SaveSystem: не удалось прочитать сейв: " + e.Message);
             GameEvents.RaiseNotify("Не удалось прочитать сейв");
@@ -243,13 +262,17 @@ public class SaveSystem : MonoBehaviour
         // SetState сам сбрасывает IsDead и шлёт StatsChanged — загрузка = оживление.
         // Майонез клампим минимум 1: мусорный ноль не должен убивать в момент загрузки.
         player.Teleport(data.playerPos);
-        // Старые сейвы с квадратной карты 200×200 могли лечь в новый океан:
-        // загрузка в протухший майонез — смерть до первого кадра. Выносим
-        // ведро на плато спауна (формат сейва не меняется).
-        if (TerrainGen.IsInOcean(player.transform.position))
+        // Сейвы в воде выносим на берег (формат сейва не меняется): старые
+        // — с квадратной карты, новые — если сохранились, стоя по грудь в
+        // воде. Ловим и глубокий океан (IsInOcean), и «голова уйдёт под
+        // поверхность сразу после загрузки» (голова ≈ пивот + 1.6,
+        // поверхность −0.45) — иначе таймер утопления тикает с первого
+        // кадра (аудит 2026-10-04).
+        var pp = player.transform.position;
+        if (TerrainGen.IsInOcean(pp) || pp.y + 1.6f < TerrainGen.SeaLevel - 0.45f)
         {
             player.Teleport(new Vector3(0f, TerrainGen.HeightAt(0f, 0f) + 1.1f, 0f));
-            GameEvents.RaiseNotify("Сейв был в океане — ведро вынесло на берег.");
+            GameEvents.RaiseNotify("Сейв был в воде — ведро вынесло на берег.");
         }
         player.ApplyView(data.yaw, data.pitch);
         player.Stats.SetState(Mathf.Max(1f, data.mayo), data.poison);
@@ -309,8 +332,9 @@ public class SaveSystem : MonoBehaviour
         return true;
     }
 
-    // Публичный фасад для UI (главное меню, Поток B): та же логика, что у F9.
+    // Публичный фасад для UI (главное меню, Поток B): та же логика, что у
+    // F9, но меню держит timeScale 0 — fromMenu обходит его проверку.
     // Возвращает false при любой неудаче — меню остаётся открытым
     // (конкретный тост уже показан Load'ом).
-    public bool LoadGame() => Load();
+    public bool LoadGame() => Load(fromMenu: true);
 }

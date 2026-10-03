@@ -16,7 +16,10 @@ public static class IconBaker
     const int Size = 128;
 
     [MenuItem("Survival/Bake Item Icons")]
-    public static void Run()
+    public static void Run() => Run(quiet: false);
+
+    // quiet: вызов из SetupMainScene — итоговый диалог показывает сам Setup.
+    public static void Run(bool quiet)
     {
         EnsureFolder(IconsFolder);
 
@@ -43,9 +46,10 @@ public static class IconBaker
 
         AssetDatabase.Refresh();
         Debug.Log($"[Survival] Иконки запечены: {baked}. {(skipped.Length > 0 ? "Пропущено:\n" + skipped : "")}");
-        EditorUtility.DisplayDialog("Survival",
-            $"Запечено иконок: {baked}" +
-            (skipped.Length > 0 ? $"\nПропущено (нет модели):\n{skipped}" : ""), "Ок");
+        if (!quiet)
+            EditorUtility.DisplayDialog("Survival",
+                $"Запечено иконок: {baked}" +
+                (skipped.Length > 0 ? $"\nПропущено (нет модели):\n{skipped}" : ""), "Ок");
     }
 
     static bool Bake(string id, GameObject model)

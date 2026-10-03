@@ -80,7 +80,8 @@ public class DayNight : MonoBehaviour
         // оставлял бы вечный день
         RenderSettings.ambientIntensity = isNight ? 0.15f : Mathf.Lerp(0.35f, 1f, intensity);
 
-        UpdateSky(intensity, isNight);
+        // Camera.main — поиск по тегу: для неба хватит одного захода на кадр
+        UpdateSky(Camera.main, intensity, isNight);
 
         if (isNight && !wasNight) GameEvents.RaiseNotify("Наступила ночь");
         if (!isNight && wasNight) GameEvents.RaiseNotify("Наступил день");
@@ -98,22 +99,21 @@ public class DayNight : MonoBehaviour
 
     // Солнце/луна — билборды вокруг камеры; облака ходят за камерой
     // и медленно дрейфуют. Альфа дисков гасится вне «их» времени суток.
-    void UpdateSky(float dayIntensity, bool isNight)
+    void UpdateSky(Camera cam, float dayIntensity, bool isNight)
     {
-        var cam = Camera.main;
         Vector3 cp = cam != null ? cam.transform.position : Vector3.zero;
 
         if (sunDisc != null && sun != null)
         {
             float a = isNight ? 0f : Mathf.Clamp01(dayIntensity * 1.2f + 0.15f);
-            PlaceDisc(sunDisc, cp - sun.transform.forward * skyDist, a);
+            PlaceDisc(sunDisc, cp, cp - sun.transform.forward * skyDist, a);
         }
         if (moonDisc != null && sun != null)
         {
             // луна — в противосолнечной точке: выше горизонта ночью
             float np = ((timeOfDay - nightStart) + 1f) % 1f / ((1f - nightStart) + dayStart);
             float a = isNight ? Mathf.Clamp01(Mathf.Sin(Mathf.PI * np) * 1.3f) : 0f;
-            PlaceDisc(moonDisc, cp + sun.transform.forward * skyDist, a);
+            PlaceDisc(moonDisc, cp, cp + sun.transform.forward * skyDist, a);
         }
         if (cloudLayer != null)
         {
@@ -130,14 +130,12 @@ public class DayNight : MonoBehaviour
         }
     }
 
-    void PlaceDisc(Renderer r, Vector3 pos, float alpha)
+    void PlaceDisc(Renderer r, Vector3 camPos, Vector3 pos, float alpha)
     {
-        var cam = Camera.main;
-        Vector3 cp = cam != null ? cam.transform.position : Vector3.zero;
         var t = r.transform;
         t.position = pos;
         // Quad «лицом» по -Z — разворачиваем плоскость от камеры
-        t.rotation = Quaternion.LookRotation(pos - cp);
+        t.rotation = Quaternion.LookRotation(pos - camPos);
         var m = r.sharedMaterial;
         if (m != null)
         {

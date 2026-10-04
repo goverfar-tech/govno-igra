@@ -75,6 +75,17 @@ public class BucketRig : MonoBehaviour
         if (legL == null || player == null || player.Stats == null) return;
         float dt = Time.deltaTime;
 
+        // СУСТАВЫ ПРИВЯЗАНЫ К ПОЛУ КАПСУЛЫ, а не к пивоту (фикс 2026-10-04:
+        // пивот — центр капсулы 2.2; суставы, поставленные «от земли»,
+        // давали ноги внутри ведра и руки у головы — замах проходил сквозь
+        // камеру). groundLocal = низ капсулы в локале пивота; присед сжимает
+        // капсулу — конечности сжимаются вместе с ней, ноги остаются на полу.
+        float groundLocal = cc != null ? -cc.height * 0.5f : -1.1f;
+        legL.localPosition = new Vector3(-LegHalf, groundLocal + LegHeight, 0f);
+        legR.localPosition = new Vector3(LegHalf, groundLocal + LegHeight, 0f);
+        armL.localPosition = new Vector3(-ArmHalf, groundLocal + ShoulderY, 0f);
+        armR.localPosition = new Vector3(ArmHalf, groundLocal + ShoulderY, 0f);
+
         // мёртвое ведро обмякает: конечности медленно сползают в ноль
         if (player.Stats.IsDead)
         {

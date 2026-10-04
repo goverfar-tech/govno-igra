@@ -484,6 +484,13 @@ public class Player : MonoBehaviour
         }
 
         // --- вид: первое/третье лицо (V, S/камера 2026-10-04) ---
+        // Вид-модель в руке — элемент первого лица: в третьем лице она
+        // висела бы у головы отдельным предметом — прячем.
+        if (handModel != null)
+        {
+            bool wantHand = !thirdPerson;
+            if (handModel.activeSelf != wantHand) handModel.SetActive(wantHand);
+        }
         // Третье лицо: камера на плече за головой, дистанция честно
         // упирается в стены (RaycastAll — свой CharacterController/конечности
         // в счёт не идут, иначе капсула «съедала» бы весь луч изнутри).

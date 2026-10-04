@@ -75,6 +75,12 @@ public class SaveSystem : MonoBehaviour
         // сейвах v2 его нет — JsonUtility молча подставит false → босс
         // жив. version намеренно не менялся.
         public bool bossDead;
+        // Герметизация дыры (X2, §9.4): уровень замазки 0..3 (0=дыра
+        // открыта, 1=смола, 2=воск, 3=битум) — постоянный прогресс до
+        // конца сейва. Необязательное поле, как bossDead: в старых сейвах
+        // v2 его нет — JsonUtility подставит 0 → дыра не замазана.
+        // version намеренно не менялся.
+        public int sealantLevel;
     }
 
     static string SavePath => Path.Combine(Application.persistentDataPath, "save.json");
@@ -160,6 +166,9 @@ public class SaveSystem : MonoBehaviour
 
         // Босс — часть мира (§9.5): убитый остаётся убитым.
         data.bossDead = FatZombie.CaptureDead();
+
+        // Замазка дыры (X2): прогресс герметиков живёт до конца сейва.
+        data.sealantLevel = player.Stats.SealantLevel;
 
         try
         {
@@ -284,6 +293,10 @@ public class SaveSystem : MonoBehaviour
         }
         player.ApplyView(data.yaw, data.pitch);
         player.Stats.SetState(Mathf.Max(1f, data.mayo), data.poison);
+        // Замазка дыры (X2): восстановление сразу после статов — тихо,
+        // без тостов (RestoreSealant не «применяет» герметик заново).
+        // Старый сейв v2 без поля → 0 = дыра открыта, ничего не падает.
+        player.Stats.RestoreSealant(data.sealantLevel);
 
         for (int i = 0; i < player.Inventory.slots.Count && i < data.inventory.Count; i++)
         {

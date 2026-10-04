@@ -33,6 +33,23 @@ public static class TerrainGen
     // юго-восточного склона; тот же вектор использует Setup для стен каньона
     public static readonly Vector2 CaveInDir = (Vector2.zero - MountainCenter).normalized;
 
+    // Завод (X5, §9.4): финальная цель пути — огромная промзона на
+    // северо-восточном краю острова (сейчас структура и площадка,
+    // пресс-финал будет позже). Точка (148,236) — ручной подбор под все
+    // ограничения планировки, проверены численно:
+    //   r≈279 от центра острова (диапазон 270–350: дальний край, но
+    //   бленд плато 1.35*R кончается на r≈330 — до полосы пляжа (330);
+    //   до MountainCenter ≈302 м (≥ MountainRadius+35): колокол горы и
+    //   каньон-вход не задеты — зона влияния площадки отстоит от горы
+    //   на ≈251 м, пол пещеры (CaveFloor) не меняется вовсе;
+    //   до TownCenter ≈407 м (≥ TownRadius+120): «дальний путь» сквозь
+    //   все зоны, Завод сидит в зоне 3 «Промзона»;
+    //   от оси «городок→причал» ≈279 м перпендикуляра (≥60): улица,
+    //   причал и силуэт Завода читаются раздельно.
+    public static readonly Vector2 FactoryCenter = new Vector2(148f, 236f);
+    public const float FactoryRadius = 38f;  // плоская промплощадка, м
+    public const float FactoryHeight = 2.2f; // верх плато — на нём стоит корень «Factory»
+
     public const int ChunkCount = 8;     // сетка 8×8 = 64 чанка по 125 м
 
     // Озеро: котловина в рельефе + WaterSource ставится на его центр
@@ -52,6 +69,39 @@ public static class TerrainGen
     // прибоя). Зовут чужие скрипты — не менять сигнатуру.
     public static bool IsInOcean(Vector3 p)
         => new Vector2(p.x, p.z).magnitude > IslandRadius + 8f && p.y < SeaLevel + 0.35f;
+
+    // --- зоны §9.4 (X5): ось прогресса «дальше от городка — опаснее/богаче» ---
+    // Пороги по расстоянию от TownCenter (городок = цивилизация, от неё
+    // читается обратная кривая сложности): раннюю игру давит голод у
+    // безопасного кольца, позднюю — враги у Завода. Герметики и лут
+    // богаче во внешних зонах — раскладку делают спавнеры/лут-таблицы,
+    // здесь только геометрия зон.
+    public const float Zone0Radius = 130f; // <130 — «Окраина», кольцо вокруг городка
+    public const float Zone1Radius = 230f; // <230 — «Леса»
+    public const float Zone2Radius = 320f; // <320 — «Гнилые поля», дальше — «Промзона»
+
+    // Зона точки 0..3 по удалённости от городка. Зовут из спавнеров и HUD
+    // на горячих путях — без аллокаций, одна дистанция.
+    public static int ZoneAt(Vector2 p)
+    {
+        float d = Vector2.Distance(p, TownCenter);
+        if (d < Zone0Radius) return 0;
+        if (d < Zone1Radius) return 1;
+        if (d < Zone2Radius) return 2;
+        return 3;
+    }
+
+    // Имя зоны для HUD/тостов; индексы согласованы с ZoneAt.
+    public static string ZoneName(int zone)
+    {
+        switch (zone)
+        {
+            case 0: return "Окраина";
+            case 1: return "Леса";
+            case 2: return "Гнилые поля";
+            default: return "Промзона";
+        }
+    }
 
     public static float HeightAt(float x, float z)
     {
@@ -96,6 +146,20 @@ public static class TerrainGen
                         && Mathf.Abs(sideIn) <= 4.5f;
         if (inHall || inCanyon)
             h = Mathf.Min(h, CaveFloor + Mathf.PerlinNoise(x * 0.15f, z * 0.15f) * 0.6f);
+
+        // промплощадка Завода (X5): слой ПОСЛЕ горы/пещеры — вырез залы и
+        // каньон уже готовы, а площадка отстоит от горы на ≈302 м, так что
+        // пол пещеры не затрагивается (зона влияния — диск 1.35*R ≈ 51 м
+        // вокруг FactoryCenter). Образец — городская терраса, но промплощадка
+        // шире: цех 24×14 и забор по периметру должны стоять на плоскости,
+        // поэтому ровно FactoryHeight внутри FactoryRadius и плавный
+        // возврат к естественному рельефу к 1.35*FactoryRadius. Берег ниже —
+        // последний слой и перекроет своё: кромка бленда (r≈330) лишь
+        // касается полосы пляжа, вклад площадки там уже ~0.
+        float dFactory = Vector2.Distance(new Vector2(x, z), FactoryCenter);
+        float factoryBlend = Mathf.SmoothStep(0f, 1f,
+            Mathf.InverseLerp(FactoryRadius * 1.35f, FactoryRadius, dFactory));
+        h = Mathf.Lerp(h, FactoryHeight, factoryBlend);
 
         // городская терраса: внутри 0.6*TownRadius — ровно TownHeight,
         // к 1.35*TownRadius плавный спуск к естественному рельефу

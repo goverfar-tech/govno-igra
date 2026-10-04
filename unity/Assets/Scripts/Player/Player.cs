@@ -189,14 +189,36 @@ public class Player : MonoBehaviour
         if (wheel < 0f) Inventory.Select((Inventory.selected + Inventory.HotbarSize - 1) % Inventory.HotbarSize);
     }
 
-    // ЛКМ: постройка > инструмент (бой/добыча) > расходник
+    // ЛКМ: постройка > инструмент (бой/добыча) > герметик > расходник
     void UseSelected()
     {
         var slot = Inventory.SelectedSlot;
         if (slot.IsEmpty) return;
         if (slot.item.isPlaceable && TryPlace(slot.item)) return;
         if (slot.item.isTool && SwingTool(slot.item)) return;
+        if (slot.item.isSealant && TryApplySealant(slot.item)) return;
         Inventory.UseSelected(this);
+    }
+
+    // Герметик (X2, §9.4): замазать дыру в дне ведра. Клик всегда
+    // поглощается (смола не еда — к Inventory.UseSelected не проваливаемся),
+    // но предмет списывается ТОЛЬКО при реальном улучшении: ApplySealant
+    // false = дыра уже замазана лучше, слабый герметик остаётся запасом.
+    bool TryApplySealant(ItemData item)
+    {
+        if (!Stats.ApplySealant(item.sealantTier))
+        {
+            GameEvents.RaiseNotify("Дыра уже замазана лучше");
+            return true;
+        }
+        // успех: тост «утечка теперь X%» уже ушёл из Stats.ApplySealant.
+        // Списание 1 шт. — та же механика, что у еды в Inventory.UseSelected
+        // (герметик не IsConsumable, туда сам не попадает), Inventory.cs не трогаем.
+        var s = Inventory.SelectedSlot;
+        s.count--;
+        if (s.count <= 0) { s.item = null; s.count = 0; }
+        GameEvents.RaiseInventoryChanged();
+        return true;
     }
 
     float swingCooldown;
@@ -213,8 +235,11 @@ public class Player : MonoBehaviour
         landOffset = Mathf.Max(landOffset - 0.05f, -0.1f);
 
         var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
+        // QueryTriggerInteraction.Ignore: удар не должен ловить мелкие
+        // триггеры мира (банка-подвеска на майонезном дереве, X3) —
+        // иначе копьё «звенит» о банку, стоящую в линии до зомби
         if (Physics.Raycast(origin, (head != null ? head.forward : transform.forward),
-                out var hit, interactRange, interactMask))
+                out var hit, interactRange, interactMask, QueryTriggerInteraction.Ignore))
         {
             var zombie = hit.collider.GetComponentInParent<Zombie>();
             if (zombie != null)
@@ -244,8 +269,10 @@ public class Player : MonoBehaviour
         }
 
         var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
+        // триггеры игнорируем (банка-подвеска X3): иначе постройка
+        // «вставала» на поверхность банки в 1.2 м над землёй
         if (!Physics.Raycast(origin, (head != null ? head.forward : transform.forward),
-                out var hit, 6f, interactMask))
+                out var hit, 6f, interactMask, QueryTriggerInteraction.Ignore))
         {
             GameEvents.RaiseNotify("Сюда не поставить");
             return true;

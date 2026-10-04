@@ -18,6 +18,18 @@ public class Stats : MonoBehaviour
     public float poisonDecay = 2f;             // ед. яда/сек выветривается
     public float poisonMayoDps = 1.5f;         // майонеза/сек, пока яд > 0
 
+    // Герметики (X2, §9.4): дыра замазывается по мере прогресса
+    // смола → воск → битум, каждый слой ПОСТОЯННО (до конца сейва)
+    // снижает утечку. Таблица множителей по уровню замазки 0..3:
+    // смола −15%, воск −30%, битум −45% — шаги равномерные, чтобы каждый
+    // герметик ощущался, но даже битум не отменяет утечку: дыра остаётся
+    // дырой (фоновое давление голода никуда не девается ~8 мин → ~14 мин).
+    // Обратная кривая сложности §9.4: лучшие герметики дальше от старта.
+    static readonly float[] SealantLeakMult = { 1f, 0.85f, 0.70f, 0.55f };
+    public int SealantLevel { get; private set; }   // 0..3
+    public float SealantLeakMultiplier =>
+        SealantLeakMult[Mathf.Clamp(SealantLevel, 0, SealantLeakMult.Length - 1)];
+
     // Тепло костра: Campfire ставит Time.time, пока игрок рядом.
     [System.NonSerialized] public float lastWarmTime = -10f;
     const float WarmWindowSec = 1f;
@@ -39,8 +51,11 @@ public class Stats : MonoBehaviour
     {
         if (IsDead) return;
         bool warm = Time.time - lastWarmTime < WarmWindowSec;
+        // герметик (X2) умножает ИТОГОВУЮ утечку — поверх бега/ночи,
+        // не вместо: замазанное ведро медленнее течёт и в покое, и в спешке
         float mult = (sprinting ? sprintLeakMultiplier : 1f)
-                   * (isNight && !warm ? nightLeakMultiplier : 1f);
+                   * (isNight && !warm ? nightLeakMultiplier : 1f)
+                   * SealantLeakMultiplier;
         Mayo = Mathf.Max(0f, Mayo - leakPerSec * mult * dt);
 
         if (Poison > 0f)
@@ -94,4 +109,25 @@ public class Stats : MonoBehaviour
         IsDead = false;
         GameEvents.RaiseStatsChanged();
     }
+
+    // Замазать дыру герметиком тира tier (X2, §9.4). false — дыра уже
+    // замазана таким или лучшим слоем: предмет НЕ тратится (сравнение
+    // тиров, слабый герметик остаётся запасом). Тост успеха здесь, а не
+    // в Player: Stats сам знает новый множитель; Player тостит только отказ.
+    public bool ApplySealant(int tier)
+    {
+        if (IsDead) return false;
+        tier = Mathf.Clamp(tier, 1, SealantLeakMult.Length - 1);
+        if (tier <= SealantLevel) return false;
+        SealantLevel = tier;
+        GameEvents.RaiseStatsChanged();
+        GameEvents.RaiseNotify($"Дыра замазана: утечка теперь {Mathf.RoundToInt(SealantLeakMultiplier * 100f)}%");
+        return true;
+    }
+
+    // Тихое восстановление уровня из сейва (SaveSystem.Load): без тостов
+    // и событий — загрузка не должна «применять» герметик заново.
+    // Старый сейв v2 без sealantLevel даст 0 — дыра не замазана.
+    public void RestoreSealant(int level) =>
+        SealantLevel = Mathf.Clamp(level, 0, SealantLeakMult.Length - 1);
 }

@@ -294,6 +294,18 @@ public static class SetupMainScene
         // food: 0 — сырое яйцо лишь ингредиент рецепта «Домашний майонез».
         var egg = SyncItem("egg", "Яйцо", 10, food: 0f, worldModel: "egg");
         var mayo = SyncItem("mayo", "Домашний майонез", 10, food: 35f, heal: 5f, worldModel: "jar");     // чистая еда §9.3
+        // --- герметики (X2, §9.4): смола → воск → битум, замазка дыры.
+        // Постоянное снижение утечки Stats.ApplySealant; добываются дальше
+        // от города (лут леса/руин/Завода) — обратная кривая сложности.
+        var resin = SyncItem("resin", "Смола", 5, worldModel: "jar");
+        resin.isSealant = true; resin.sealantTier = 1;
+        var wax = SyncItem("wax", "Воск", 5, worldModel: "bottle-large");
+        wax.isSealant = true; wax.sealantTier = 2;
+        var bitumen = SyncItem("bitumen", "Битум", 5, worldModel: "barrel");
+        bitumen.isSealant = true; bitumen.sealantTier = 3;
+        // --- майонезный сок (X3, §9.3): чистая еда с деревьев-подвесок,
+        // без яда — стабильный безопасный ресурс против ядовитого мяса.
+        var juice = SyncItem("juice", "Майонезный сок", 10, food: 12f, worldModel: "jar");
         var spear = SyncItem("spear", "Деревянное копьё", 1, isTool: true, toolDamage: 10f, worldModel: "tool-hoe");
         // worldModel у постройками — только для иконки и вида в руке:
         // в мире ставится placeablePrefab, как и раньше
@@ -362,6 +374,8 @@ public static class SetupMainScene
                 if (Vector2.Distance(p, TerrainGen.TownCenter) < TerrainGen.TownRadius + 12f) continue;
                 if (Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 12f)
                     continue;
+                if (Vector2.Distance(p, TerrainGen.FactoryCenter) < TerrainGen.FactoryRadius + 12f)
+                    continue; // пятна построек не на промплощадке (X5)
                 if (PierLineDist(p) < 12f) continue; // не на оси причала
                 float hMin = float.MaxValue, hMax = float.MinValue;
                 for (int c = 0; c < 4; c++)
@@ -400,6 +414,16 @@ public static class SetupMainScene
             tc.radius = 0.3f;
             var tn = t.AddComponent<ResourceNode>();
             tn.yield = wood; tn.hitsLeft = 3; tn.pickupPrefab = pickupPrefabAsset;
+            // банка-подвеска (X3, §9.3): каждый ~10-й деревянный узел —
+            // источник сока (за ночь, сбор по E). MayoTreeTap добавляется
+            // СТРОГО после ResourceNode: на корне дерева первым IInteractable
+            // должен оставаться рубильный узел, иначе луч по стволу сломается.
+            if (i % 10 == 0)
+            {
+                var tap = t.AddComponent<MayoTreeTap>();
+                tap.juiceItem = juice;
+                tap.sideAngle = (float)rng.NextDouble() * 360f; // сторона банки
+            }
         }
         if (treesSkipped > 0)
             missing.AppendLine($"scatter trees: пропущено {treesSkipped} из {treeTotal} (нет GLB-моделей)");
@@ -542,6 +566,12 @@ public static class SetupMainScene
 
         // таблица лута контейнеров: фляга, дерево, камень, майонез, котлета
         var lootTable = new ItemData[] { flask, wood, stone, mayo, cookedMeat };
+        // Зонный лут (X2/X5, §9.4): чем дальше от города, тем жирнее
+        // герметики. Точки гарантированно существуют (не лотерея §9.3),
+        // роллы — по curated-таблице: «достать можно всегда, но с затратами».
+        var lootTableForest = new ItemData[] { flask, wood, stone, mayo, cookedMeat, resin };
+        var lootTableRuins = new ItemData[] { flask, wood, stone, mayo, cookedMeat, resin, wax };
+        var lootTableFactory = new ItemData[] { wax, bitumen, bitumen, mayo, cookedMeat, flask };
 
         // прогрев кусков городка: LoadModel синхронно реимпортирует GLB,
         // на 200+ кусков дешевле один проход. Тип без ассета пишет одну
@@ -1095,6 +1125,8 @@ public static class SetupMainScene
                 if (TerrainGen.IsInOcean(new Vector3(x, 1f, z))) continue;
                 if (TerrainGen.HeightAt(x, z) < TerrainGen.SeaLevel + 0.5f) continue;
                 if (PierLineDist(new Vector2(x, z)) < 8f) continue; // не сквозь причал
+                if (Vector2.Distance(new Vector2(x, z), TerrainGen.FactoryCenter)
+                    < TerrainGen.FactoryRadius + 12f) continue; // не на промплощадке
                 bool tooCloseSpot = false;
                 foreach (var sp in buildingSpots)
                     if (Vector2.Distance(new Vector2(x, z), sp) < 25f)
@@ -1122,7 +1154,7 @@ public static class SetupMainScene
                 if (lootBox != null)
                     lootBox.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
                 SpawnLootPoint(OnGround(rp.x + 1.2f, rp.y - 0.8f, 0.5f),
-                    "Loot_Ruins_" + lootRuins, lootTable, 2);
+                    "Loot_Ruins_" + lootRuins, lootTableRuins, 2);
             }
 
             int props = 2 + rng.Next(0, 3); // 2-4 предмета
@@ -1221,9 +1253,21 @@ public static class SetupMainScene
                     fprop.transform.rotation = Quaternion.Euler(0f,
                         (float)rng.NextDouble() * 360f, 0f);
                 SpawnLootPoint(OnGround(side.x, side.z, 0.45f),
-                    "Loot_Forest_" + forestLootI, lootTable, 2);
+                    "Loot_Forest_" + forestLootI, lootTableForest, 2);
             }
         }
+
+        // --- Завод (X5, §9.4): структура на промплощадке — цех/труба/
+        // силосы/забор/декор; финальный пресс будет позже (фаза 4).
+        // Зона 3 «Промзона» — герметиковый конец пути.
+        FactoryBuilder.Build(rng, msg => missing.AppendLine(msg));
+        // лут Завода: два контейнера в цехе, битумная таблица
+        SpawnLootPoint(new Vector3(TerrainGen.FactoryCenter.x - 6f,
+            TerrainGen.FactoryHeight + 0.45f, TerrainGen.FactoryCenter.y + 6f),
+            "Loot_Factory_1", lootTableFactory, 2);
+        SpawnLootPoint(new Vector3(TerrainGen.FactoryCenter.x + 7f,
+            TerrainGen.FactoryHeight + 0.45f, TerrainGen.FactoryCenter.y - 5f),
+            "Loot_Factory_2", lootTableFactory, 2);
 
         // --- зомби-спавнер (M5): 6 зомби каждую ночь кольцом вокруг игрока,
         // +1 за каждую ночь до 14 (автор просил больше зомби) ---
@@ -1231,6 +1275,11 @@ public static class SetupMainScene
         var spawner = spawnerGo.AddComponent<ZombieSpawner>();
         spawner.dropItem = meat; // с зомби падает сырая плоть
         spawner.pickupPrefab = pickupPrefabAsset;
+        // --- приливы (X1, §9.4): каждые 3-ю ночь усиленный рой идёт ПО
+        // СЛЕДУ игрока; закатное предупреждение перед приливной ночью.
+        // Самодостаточен (дроп/пикап берёт лениво), прилив идёт СВЕРХ
+        // обычного ночного спавна.
+        new GameObject("MayoSurge").AddComponent<MayoSurge>();
 
         // --- куры (§9.3): четыре. Первая — ГАРАНТИРОВАННАЯ у деревни
         // (фидбек автора 2026-10-04): кольцо 15–55 м за кромкой городка
@@ -1276,6 +1325,8 @@ public static class SetupMainScene
                 if (Vector2.Distance(p, TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f) continue;
                 if (Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 10f)
                     continue; // вся гора, включая логово босса — зона запрета
+                if (Vector2.Distance(p, TerrainGen.FactoryCenter) < TerrainGen.FactoryRadius + 10f)
+                    continue; // и промплощадка Завода — не куриный двор (X5)
                 bool tooClose = false;
                 for (int prev = 0; prev < chickenCount; prev++)
                     if (Vector2.Distance(p, chickenPts[prev]) < 120f) { tooClose = true; break; }
@@ -1458,6 +1509,9 @@ public static class SetupMainScene
             // случайная растительность/пропсы не растут в городке — иначе
             // дерево прорастало сквозь дом (фидбек плейтеста 2026-10-03)
             if (Vector2.Distance(new Vector2(x, z), TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f)
+                continue;
+            // и на промплощадке Завода им не место (X5)
+            if (Vector2.Distance(new Vector2(x, z), TerrainGen.FactoryCenter) < TerrainGen.FactoryRadius + 6f)
                 continue;
             if (avoid != null)
             {

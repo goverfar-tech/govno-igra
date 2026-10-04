@@ -125,8 +125,10 @@ public class ZombieSpawner : MonoBehaviour
     }
 
     // Тело из кубов с вытянутыми вперёд руками — spooky-cute (§9.1).
+    // public: приливная волна MayoSurge (X1) спавнит тем же телом —
+    // материалы static и общие, дублирования нет.
     static Material bodyMat, eyeMat;
-    static void BuildBody(Transform root)
+    public static void BuildBody(Transform root)
     {
         if (bodyMat == null)
         {

@@ -22,6 +22,14 @@ public class ItemData : ScriptableObject
     // Что возвращается после использования (фляга: полная → пустая)
     public ItemData consumeReturns;
 
+    [Header("Герметик (X2, §9.4): замазка дыры в дне ведра")]
+    // Флаг отличает герметик от еды в Player.UseSelected: ЛКМ = замазать
+    // дыру, а не съесть. sealantTier — какой это слой замазки:
+    // 1=смола, 2=воск, 3=битум; чем выше тир, тем сильнее падает утечка
+    // (таблица множителей — в Stats). Постоянно до конца сейва.
+    public bool isSealant;
+    public int sealantTier;
+
     [Header("Инструмент (для системы добычи/боя, M5)")]
     public bool isTool;
     public float toolDamage;

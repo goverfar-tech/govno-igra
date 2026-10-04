@@ -150,6 +150,29 @@ public class MayoTrail : MonoBehaviour
         return spot;
     }
 
+    // Живые точки следа для приливов (X1 §9.4): MayoSurge строит из них
+    // маршрут волны «от старейшей к свежей». Static — режиссёру приливов
+    // не нужна ссылка на компонент (самодостаточность MayoSurge).
+    // max — потолок длины маршрута; если живых точек больше, отрезаются
+    // САМЫЕ СТАРЫЕ (берём свежий хвост), порядок «старые → свежие» сохранён.
+    public static List<Vector3> RecentPoints(int max)
+    {
+        var result = new List<Vector3>();
+        if (Instance == null || max <= 0) return result;
+        float now = Time.time;
+        // points хранятся в порядке добавления (старые → свежие); Update
+        // выметает протухшее сам, но вызов может прийти между чистками —
+        // фильтруем по возрасту, чтобы маршрут не вёл в испарившийся след.
+        foreach (var p in Instance.points)
+        {
+            if (now - p.time > Instance.lifeSec) continue;
+            result.Add(p.pos); // точки уже в мировых координатах
+        }
+        if (result.Count > max)
+            result.RemoveRange(0, result.Count - max);
+        return result;
+    }
+
     // Самая «вкусная» свежая точка следа в радиусе; false — следов нет.
     public bool FreshestNear(Vector3 pos, float radius, out Vector3 result)
     {

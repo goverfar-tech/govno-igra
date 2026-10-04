@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Зомби (M5, майонезная мета §9): ночная угроза.
@@ -42,6 +43,15 @@ public class Zombie : MonoBehaviour
 
     enum State { Idle, Wander, Chase, Attack }
     State state = State.Idle;
+
+    // ---- Маршрут приливной волны (X1 §9.4) ----
+    // MayoSurge ведёт рой ПО СЛЕДУ игрока: точки следа от старейшей к
+    // свежей + позиция игрока на момент спавна. Маршрут живёт только в
+    // IDLE/WANDER; любое агро (LOS/урон) его сбрасывает — бой важнее
+    // «сценария» прилива. Своя копия списка: весь рой делит один List,
+    // а индекс у каждого зомби свой.
+    List<Vector3> waveRoute;
+    int routeIndex;
 
     void Awake()
     {
@@ -101,6 +111,10 @@ public class Zombie : MonoBehaviour
                     EnterChase();
                     break;
                 }
+                // приливная волна: пока маршрут жив — идём по нему обычным
+                // шагом вместо блуждания (нюх в Wander не работает: сценарий
+                // прилива важнее случайных точек)
+                if (FollowWaveRoute()) break;
                 Wander();
                 break;
             case State.Chase:
@@ -201,12 +215,59 @@ public class Zombie : MonoBehaviour
     }
 
     // Переход в погоню с вскриком (единая точка — звук не задваивается).
+    // Сюда же приходит и агр по урону — маршрут прилива сбрасывается
+    // в обоих случаях (LOS/урон), боевое поведение как раньше.
     void EnterChase()
     {
+        ClearWaveRoute();
         state = State.Chase;
         lastKnown = player.transform.position;
         searchTimer = SearchTime;
         AudioManager.GruntAt(transform.position); // вскрик засечения
+    }
+
+    // ---- Маршрут приливной волны (вызывает MayoSurge) ----
+    // Назначить маршрут «по следу». В IDLE/WANDER зомби пойдёт по точкам
+    // обычной скоростью (walkSpeed); конец маршрута — обычное поведение.
+    // CHASE/ATTACK маршрутом не перебиваем: агр по LOS/урону сбрасывает
+    // его через EnterChase/ClearWaveRoute.
+    public void SetWaveRoute(List<Vector3> route)
+    {
+        if (route == null || route.Count == 0) return;
+        waveRoute = new List<Vector3>(route); // копия: рой делит один список
+        routeIndex = 0;
+        if (state == State.Idle) state = State.Wander; // сразу в шаг, не стоять
+    }
+
+    void ClearWaveRoute()
+    {
+        waveRoute = null;
+        routeIndex = 0;
+    }
+
+    // Шаг по маршруту; true — маршрут ещё жив. Застрял о ствол/камень —
+    // пропускаем точку (рой не должен вязнуть на рельефе), движение
+    // остаётся на MoveTowards с его клампом к острову.
+    bool FollowWaveRoute()
+    {
+        if (waveRoute == null) return false;
+        if (TrackStuck())
+        {
+            routeIndex++;
+            ResetUnstick();
+        }
+        // досыгаем пройденные точки (порог шире wander'овского 1 м:
+        // зомби идут роем и не обязаны стоять точно в лужице)
+        while (routeIndex < waveRoute.Count
+               && HorizontalDist(waveRoute[routeIndex]) < 1.2f)
+            routeIndex++;
+        if (routeIndex >= waveRoute.Count)
+        {
+            ClearWaveRoute(); // маршрут пройден — дальше обычное поведение
+            return false;
+        }
+        MoveTowards(waveRoute[routeIndex], walkSpeed);
+        return true;
     }
 
     // Зрение: луч от головы зомби к ГРУДИ игрока. Пивот игрока — середина

@@ -339,12 +339,59 @@ public static class SetupMainScene
         float scatterMinR = 0.07f * TerrainGen.Size;
         float scatterMaxR = Mathf.Min(0.45f * TerrainGen.Size, TerrainGen.IslandRadius - 40f);
 
+        // --- пятна одиночных построек (S/лес 2026-10-04): застолблены ДО
+        // рассеивания, чтобы деревья/камни обходили их стороной. Кольцо
+        // 0.18–0.32*Size: лес за городом, до кольца силуэтов (0.34+).
+        // Пятно годится, если это суша вне озера/городка/горы, площадка
+        // 6×6 м ровная (перепад ≤0.6 м) и до соседнего пятна ≥45 м.
+        // Сами постройки ставятся ниже, после заброшенностей.
+        var buildingSpots = new List<Vector2>();
+        for (int i = 0; i < 5; i++)
+        {
+            float bMinR = 0.18f * TerrainGen.Size;
+            float bMaxR = 0.32f * TerrainGen.Size;
+            for (int attempt = 0; attempt < 40; attempt++)
+            {
+                float ang = (float)rng.NextDouble() * Mathf.PI * 2f;
+                float rr = Mathf.Lerp(bMinR, bMaxR, (float)rng.NextDouble());
+                float x = Mathf.Cos(ang) * rr, z = Mathf.Sin(ang) * rr;
+                var p = new Vector2(x, z);
+                if (TerrainGen.IsInOcean(new Vector3(x, 1f, z))) continue;
+                if (TerrainGen.HeightAt(x, z) < TerrainGen.SeaLevel + 0.5f) continue;
+                if (Vector2.Distance(p, TerrainGen.LakeCenter) < TerrainGen.LakeRadius + 4f) continue;
+                if (Vector2.Distance(p, TerrainGen.TownCenter) < TerrainGen.TownRadius + 12f) continue;
+                if (Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 12f)
+                    continue;
+                if (PierLineDist(p) < 12f) continue; // не на оси причала
+                float hMin = float.MaxValue, hMax = float.MinValue;
+                for (int c = 0; c < 4; c++)
+                {
+                    float h = TerrainGen.HeightAt(x + (c % 2 == 0 ? -3f : 3f),
+                                                  z + (c < 2 ? -3f : 3f));
+                    if (h < hMin) hMin = h;
+                    if (h > hMax) hMax = h;
+                }
+                if (hMax - hMin > 0.6f) continue;
+                bool tooClose = false;
+                foreach (var other in buildingSpots)
+                    if (Vector2.Distance(p, other) < 45f)
+                    {
+                        tooClose = true;
+                        break;
+                    }
+                if (tooClose) continue;
+                buildingSpots.Add(p);
+                break;
+            }
+        }
+
         // деревья (все добываемые; количество ∝ площади карты)
         int treeTotal = Mathf.Max(50, Mathf.RoundToInt(50 * sizeScale * sizeScale));
         int treesSkipped = 0;
         for (int i = 0; i < treeTotal; i++)
         {
-            var t = SpawnModel(i % 3 == 0 ? "tree-tall" : "tree", RandomPos(rng, scatterMinR, scatterMaxR),
+            var t = SpawnModel(i % 3 == 0 ? "tree-tall" : "tree",
+                RandomPos(rng, scatterMinR, scatterMaxR, buildingSpots, 9f),
                 "Tree" + i, 2.6f + (float)rng.NextDouble() * 0.8f);
             if (t == null) { treesSkipped++; continue; }
             var tc = t.AddComponent<CapsuleCollider>();
@@ -363,7 +410,8 @@ public static class SetupMainScene
         int rocksSkipped = 0;
         for (int i = 0; i < rockTotal; i++)
         {
-            var r = SpawnModel(rockModels[i % 3], RandomPos(rng, scatterMinR, scatterMaxR),
+            var r = SpawnModel(rockModels[i % 3],
+                RandomPos(rng, scatterMinR, scatterMaxR, buildingSpots, 6f),
                 "Rock" + i, 1.5f + (float)rng.NextDouble() * 0.7f);
             if (r == null) { rocksSkipped++; continue; }
             var rc = r.AddComponent<BoxCollider>();
@@ -400,6 +448,9 @@ public static class SetupMainScene
                         + ((float)rng.NextDouble() - 0.5f) * 0.35f;
             float r = Mathf.Lerp(edgeMinR, edgeMaxR, (float)rng.NextDouble());
             float x = Mathf.Cos(ang) * r, z = Mathf.Sin(ang) * r;
+            // силуэт не должен торчать сквозь настил причала (фикс кадра
+            // причала: теперь он идёт по этой зоне)
+            if (PierLineDist(new Vector2(x, z)) < 8f) continue;
             bool isRock = rng.Next(0, 2) == 0;
             string model = isRock
                 ? edgeRocks[rng.Next(0, edgeRocks.Length)]
@@ -496,9 +547,12 @@ public static class SetupMainScene
         // на 200+ кусков дешевле один проход. Тип без ассета пишет одну
         // строку в missing, и составные блоки с ним пропускаются целиком.
         string[] townPieces = {
-            "structure-floor", "tree-trunk", "structure-metal-wall", "structure-metal-doorway",
-            "structure-metal-roof", "bedroll", "signpost", "barrel", "barrel-open",
-            "box-large", "box-large-open", "chest", "campfire-pit", "fence",
+            "structure-floor", "tree-trunk", "structure-metal-wall", "bedroll",
+            "signpost", "barrel", "barrel-open", "box-large", "box-large-open",
+            "chest", "campfire-pit", "fence",
+            // цельные постройки (S/город 2026-10-04): Quaternius + CreativeTrio,
+            // CC0, ссылки в Models/CREDITS-village.md
+            "house", "hut", "barracks", "cabin-shed", "port", "mine",
             // типы заброшенностей: раньше грузились мимо словаря и молча
             // не спавнились — теперь прогреваются вместе с городом
             "box-open", "signpost-single", "resource-planks"
@@ -593,155 +647,64 @@ public static class SetupMainScene
                 canopy.transform.GetChild(0).localScale = new Vector3(6.4f, 0.4f, 6.4f);
         }
 
-        // --- дома вдоль улицы: 6 штук по обе стороны, фасад в 5.5 м от оси,
-        // шаг вдоль 10 м, косость фасада ±4°. Панель стены 0.535×0.5 м,
-        // масштаб 6 -> 3.2×3.0; полотно в GLB лежит на ребре тайла (сдвиг
-        // 0.2233 от пивота) — компенсируем в позиции корня, как в старых
-        // лачугах. Дома ходибельные: фундамент-плита 4×4 со ступенькой
-        // 0.16 м, коллайдеры на стенах и фундаменте, дверной проём открыт
-        // (косяки + перемычка, размеры по замеру GLB). Дом 6 (последний,
-        // у причала) полуразрушен: без крыши, задняя стена отвалилась под
-        // 25-40°. В домах 1-2 перегородка и лежанка, в домах 1/3/5 —
-        // сундук или ящик с лут-контейнером Loot_Town_N.
-        if (townPrefab.ContainsKey("structure-metal-wall")
-            && townPrefab.ContainsKey("structure-metal-doorway"))
+        // --- дома вдоль улицы: 6 цельных построек (S/город 2026-10-04).
+        // Сборка из панелей заменена на готовые GLB Quaternius/CreativeTrio
+        // (house/hut/barracks/cabin-shed): полноценная деревня вместо
+        // развалюхи. Фасад к улице, косость ±4°, утоплены на 0.25 м —
+        // прячем стык с рельефом. Коллайдер — сплошной бокс: внутрь не
+        // зайти (двери моделей декоративные), лут переехал к крыльцу.
+        // Имена контейнеров Loot_Town_N прежние — обысканность в сейвах.
+        string[] houseModels = { "house", "hut", "house", "barracks", "hut", "cabin-shed" };
+        const float houseSize = 6.5f; // целевой габарит по фасаду, м
+        int lootI = 0;
+        for (int i = 0; i < 6; i++)
         {
-            const float wallScale = 6f;
-            const float roomHalf = 1.6f;
-            const float wallOff = roomHalf + 0.2233f * wallScale; // пивот панели
-            const float foundY = 0.165f;    // верх фундамента (0.5487 * 0.3)
-            float wallH = 0.5f * wallScale; // верх стен — сюда кладём крышу
-            int lootI = 0;
-            for (int i = 0; i < 6; i++)
+            int s = i < 3 ? 1 : -1; // сторона улицы
+            float d = s > 0 ? -18f + i * 10f : -13f + (i - 3) * 10f;
+            bool withLoot = i == 0 || i == 2 || i == 4;
+            string hn = "Town_House_" + (i + 1);
+
+            Vector2 hp = townC + pierDir * d + perpDir * (s * 7.1f);
+            Vector3 toStreet = new Vector3(-s * perpDir.x, 0f, -s * perpDir.y);
+            float yaw = Mathf.Atan2(toStreet.x, toStreet.z) * Mathf.Rad2Deg
+                        + ((float)rng.NextDouble() - 0.5f) * 8f;
+            var house = SpawnBuilding(townPrefab, houseModels[i], hp, hn, houseSize, yaw);
+            if (house == null)
             {
-                int s = i < 3 ? 1 : -1; // сторона улицы
-                float d = s > 0 ? -18f + i * 10f : -13f + (i - 3) * 10f;
-                bool ruined = i == 5;
-                bool twoRooms = i == 0 || i == 1;
-                bool withLoot = i == 0 || i == 2 || i == 4;
-                string hn = "Town_House_" + (i + 1);
+                missing.AppendLine("town house: " + houseModels[i] + ".glb");
+                continue;
+            }
 
-                Vector2 hp = townC + pierDir * d + perpDir * (s * (roomHalf + 5.5f));
-                var house = new GameObject(hn);
-                house.transform.position = OnGround(hp.x, hp.y);
-                // фасад к улице: +Z дома смотрит через дорогу, косость ±4°
-                Quaternion face = Quaternion.LookRotation(
-                    new Vector3(-s * perpDir.x, 0f, -s * perpDir.y));
-                house.transform.rotation =
-                    Quaternion.Euler(0f, ((float)rng.NextDouble() - 0.5f) * 8f, 0f) * face;
-
-                // фундамент: 2×2 секции -> плита 4×4 м, чуть шире стен
-                if (townPrefab.ContainsKey("structure-floor"))
-                    for (int f = 0; f < 4; f++)
-                    {
-                        var fsec = SpawnTownPiece(townPrefab, "structure-floor",
-                            Vector3.zero, hn + "_Found_" + f);
-                        if (fsec == null) continue;
-                        fsec.transform.SetParent(house.transform, false);
-                        fsec.transform.localPosition =
-                            new Vector3((f % 2) * 2f - 1f, 0f, (f / 2) * 2f - 1f);
-                        fsec.transform.GetChild(0).localScale = new Vector3(4f, 0.3f, 4f);
-                        AddPieceCollider(fsec); // по нему ходят
-                    }
-
-                // вход: дверная панель к улице, проём не запираем коллайдером
-                var door = SpawnTownPiece(townPrefab, "structure-metal-doorway",
-                    Vector3.zero, hn + "_Door", wallScale);
-                if (door != null)
+            // заброшенная лежанка у стены (декор, без коллайдера)
+            if ((i == 0 || i == 4) && townPrefab.ContainsKey("bedroll"))
+            {
+                var bed = SpawnTownPiece(townPrefab, "bedroll",
+                    Vector3.zero, hn + "_Bedroll", 3f);
+                if (bed != null)
                 {
-                    door.transform.SetParent(house.transform, false);
-                    door.transform.localPosition = new Vector3(0f, foundY, wallOff);
-                    AddDoorwayColliders(door);
+                    bed.transform.SetParent(house.transform, false);
+                    bed.transform.localPosition = new Vector3(4.0f, 0.3f, 0.6f);
+                    bed.transform.localRotation = Quaternion.Euler(0f, 30f, 0f);
                 }
+            }
 
-                // глухие стены E/S/W
-                string[] sideNames = { "WallE", "WallS", "WallW" };
-                Vector3[] sidePos = {
-                    new Vector3(wallOff, foundY, 0f), new Vector3(0f, foundY, -wallOff),
-                    new Vector3(-wallOff, foundY, 0f) };
-                float[] sideYaw = { 90f, 180f, 270f };
-                for (int side = 0; side < 3; side++)
-                {
-                    var piece = SpawnTownPiece(townPrefab, "structure-metal-wall",
-                        Vector3.zero, hn + "_" + sideNames[side], wallScale);
-                    if (piece == null) continue;
-                    piece.transform.SetParent(house.transform, false);
-                    if (ruined && side == 1)
-                    {
-                        // задняя стена отвалилась: наклон 25-40° и отвал от дома
-                        piece.transform.localRotation = Quaternion.Euler(0f,
-                            sideYaw[side] + ((float)rng.NextDouble() - 0.5f) * 20f,
-                            25f + (float)rng.NextDouble() * 15f);
-                        piece.transform.localPosition = sidePos[side] * 1.4f;
-                    }
-                    else
-                    {
-                        piece.transform.localRotation = Quaternion.Euler(0f, sideYaw[side], 0f);
-                        piece.transform.localPosition = sidePos[side];
-                    }
-                    AddPieceCollider(piece, 0.15f);
-                }
-
-                // крыша (у разрушенного дома нет)
-                if (!ruined && townPrefab.ContainsKey("structure-metal-roof"))
-                {
-                    var roof = SpawnTownPiece(townPrefab, "structure-metal-roof",
-                        Vector3.zero, hn + "_Roof");
-                    if (roof != null)
-                    {
-                        roof.transform.SetParent(house.transform, false);
-                        // 6 по пятну (3.3 м, со свесом), 2.2 по высоте конька
-                        roof.transform.GetChild(0).localScale = new Vector3(6f, 2.2f, 6f);
-                        roof.transform.localPosition = new Vector3(0f, foundY + wallH, 0f);
-                    }
-                }
-
-                // перегородка: укороченная панель делит дом на 2 комнаты,
-                // у стен зазор ~0.75 м — протиснуться можно
-                if (twoRooms && townPrefab.ContainsKey("structure-metal-wall"))
-                {
-                    var part = SpawnTownPiece(townPrefab, "structure-metal-wall",
-                        Vector3.zero, hn + "_Partition", wallScale);
-                    if (part != null)
-                    {
-                        part.transform.SetParent(house.transform, false);
-                        // полотно смещено в GLB на -0.2233 от пивота: корень
-                        // ставим так, чтобы полотно легло на z=0 посреди дома
-                        part.transform.localPosition = new Vector3(0f, foundY, 0.2233f * wallScale);
-                        part.transform.GetChild(0).localScale = new Vector3(2.2f, 6f, 6f);
-                        AddPieceCollider(part);
-                    }
-                    if (townPrefab.ContainsKey("bedroll"))
-                    {
-                        var bed = SpawnTownPiece(townPrefab, "bedroll",
-                            Vector3.zero, hn + "_Bedroll", 3f);
-                        if (bed != null)
-                        {
-                            bed.transform.SetParent(house.transform, false);
-                            bed.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
-                            bed.transform.localPosition = new Vector3(0f, foundY, -0.8f);
-                        }
-                    }
-                }
-
-                // лут: сундук/ящик внутри + невидимый контейнер Loot_Town_N
-                if (withLoot)
-                {
-                    lootI++;
-                    bool useChest = lootI != 2; // дом 3 — открытый ящик
-                    string vis = useChest ? "chest" : "box-large-open";
-                    var lootProp = SpawnTownPiece(townPrefab, vis,
-                        Vector3.zero, hn + (useChest ? "_Chest" : "_Box"), 2.5f);
-                    Vector3 propLocal = new Vector3(-0.8f, foundY, twoRooms ? 0.8f : -0.85f);
-                    if (lootProp != null)
-                    {
-                        lootProp.transform.SetParent(house.transform, false);
-                        lootProp.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
-                        lootProp.transform.localPosition = propLocal;
-                    }
-                    SpawnLootPoint(house.transform.TransformPoint(propLocal + Vector3.up * 0.35f),
-                        "Loot_Town_" + lootI, lootTable, 2);
-                }
+            // лут у крыльца: сундук/ящик (декор) + невидимый контейнер
+            if (withLoot)
+            {
+                lootI++;
+                bool useChest = lootI != 2; // «дом 3» — открытый ящик
+                string vis = useChest ? "chest" : "box-large-open";
+                var hcol = house.GetComponent<BoxCollider>();
+                float half = hcol != null ? Mathf.Max(hcol.size.z * 0.5f, 2f) : 3f;
+                Vector3 front = house.transform.TransformPoint(
+                    new Vector3(0f, 0f, half + 0.9f));
+                var lootProp = SpawnTownPiece(townPrefab, vis,
+                    OnGround(front.x, front.z), hn + (useChest ? "_Chest" : "_Box"), 2.5f);
+                if (lootProp != null)
+                    lootProp.transform.rotation = Quaternion.Euler(0f,
+                        (float)rng.NextDouble() * 360f, 0f);
+                SpawnLootPoint(OnGround(front.x, front.z, 0.45f),
+                    "Loot_Town_" + lootI, lootTable, 2);
             }
         }
 
@@ -761,8 +724,14 @@ public static class SetupMainScene
             const float secY = 0.3f;         // толщина настила ~0.16 м
             float deckYOf(Vector2 p) => Mathf.Max(TerrainGen.HeightAt(p.x, p.y) + pierUpLand,
                                                   TerrainGen.SeaLevel + pierUpSea);
+            // ВАЖНО (фикс 2026-10-04): d здесь — дистанция ОТ townC, а не от
+            // центра острова. Прежние границы (townR+10..IslandRadius+14)
+            // учитывали радиус городка дважды (p = townC + pierDir*d), и весь
+            // причал уезжал на r≈586..722 — за край карты, в никуда, без
+            // связи с улицей (улица кончается на r≈296).
+            float pierEndD = TerrainGen.IslandRadius + 14f - townR;
             int secI = 0;
-            for (float d = townR + 10f; d <= TerrainGen.IslandRadius + 14f + 0.01f; d += 2f)
+            for (float d = 10f; d <= pierEndD + 0.01f; d += 2f)
             {
                 secI++;
                 for (int row = 0; row < 3; row++)
@@ -782,7 +751,7 @@ public static class SetupMainScene
             {
                 const float trunkH = 0.2608f; // высота ствола в GLB
                 int postI = 0;
-                for (float d = townR + 12f; d <= TerrainGen.IslandRadius + 12f; d += 4f)
+                for (float d = 12f; d <= pierEndD - 2f; d += 4f)
                     for (int e = 0; e < 2; e++)
                     {
                         Vector2 p = townC + pierDir * d + perp * (e == 0 ? -2.5f : 2.5f);
@@ -801,7 +770,7 @@ public static class SetupMainScene
             {
                 const float railScale = 2.4f; // секция 0.5 -> 1.2 м
                 int railI = 0;
-                for (float d = townR + 10f; d <= TerrainGen.IslandRadius + 12f; d += 4f)
+                for (float d = 10f; d <= pierEndD - 2f; d += 4f)
                     for (int e = 0; e < 2; e++)
                     {
                         Vector2 p = townC + pierDir * d + perp * (e == 0 ? -2.5f : 2.5f);
@@ -816,20 +785,27 @@ public static class SetupMainScene
                     }
             }
 
-            // конец причала: бочка и ящик с лутом на площадке разворота
-            Vector2 endMid = townC + pierDir * (TerrainGen.IslandRadius + 13f);
-            float endY = deckYOf(endMid);
+            // конец причала: порт-модель (Quaternius «Port») — пирсовая
+            // постройка на площадке разворота, точка назначения. Бочка,
+            // ящик и лут — перед ней, к городу (имя Loot_Pier_1 прежнее).
+            Vector2 endMid = townC + pierDir * (pierEndD - 2f);
+            float endY = deckYOf(endMid) + secY * 0.5487f; // верх настила
+            float portYaw = Mathf.Atan2(-pierDir.x, -pierDir.y) * Mathf.Rad2Deg;
+            if (SpawnBuilding(townPrefab, "port", endMid, "Pier_Port", 6.5f, portYaw,
+                   0f, endY) == null)
+                missing.AppendLine("pier: port.glb");
+            Vector2 frontMid = endMid - pierDir * 4.2f;
             var pierBarrel = SpawnTownPiece(townPrefab, "barrel",
-                new Vector3(endMid.x - perp.x * 1.2f, endY + secY * 0.5487f, endMid.y - perp.y * 1.2f),
+                new Vector3(frontMid.x - perp.x * 1.3f, endY, frontMid.y - perp.y * 1.3f),
                 "Pier_Barrel", 2.5f);
             if (pierBarrel != null)
                 pierBarrel.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
             var pierBox = SpawnTownPiece(townPrefab, "box-large-open",
-                new Vector3(endMid.x + perp.x * 1.2f, endY + secY * 0.5487f, endMid.y + perp.y * 1.2f),
+                new Vector3(frontMid.x + perp.x * 1.3f, endY, frontMid.y + perp.y * 1.3f),
                 "Pier_Box", 2.5f);
             if (pierBox != null)
                 pierBox.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-            SpawnLootPoint(new Vector3(endMid.x, endY + 0.5f, endMid.y), "Loot_Pier_1", lootTable, 2);
+            SpawnLootPoint(new Vector3(frontMid.x, endY + 0.45f, frontMid.y), "Loot_Pier_1", lootTable, 2);
         }
 
         // --- пещера и босс (S/пещера 2026-10-03) ---
@@ -1118,6 +1094,15 @@ public static class SetupMainScene
                 float x = Mathf.Cos(ang) * rr, z = Mathf.Sin(ang) * rr;
                 if (TerrainGen.IsInOcean(new Vector3(x, 1f, z))) continue;
                 if (TerrainGen.HeightAt(x, z) < TerrainGen.SeaLevel + 0.5f) continue;
+                if (PierLineDist(new Vector2(x, z)) < 8f) continue; // не сквозь причал
+                bool tooCloseSpot = false;
+                foreach (var sp in buildingSpots)
+                    if (Vector2.Distance(new Vector2(x, z), sp) < 25f)
+                    {
+                        tooCloseSpot = true;
+                        break;
+                    }
+                if (tooCloseSpot) continue;
                 rp = new Vector2(x, z);
                 found = true;
                 break;
@@ -1203,6 +1188,40 @@ public static class SetupMainScene
                         }
                         break;
                 }
+            }
+        }
+
+        // --- одиночные постройки в лесу (S/лес 2026-10-04): до 5 штук на
+        // пятнах, застолбленных ДО рассеивания (деревья/камни их обходят).
+        // Дом и хижина с ящиком лута у стены (Loot_Forest_N — новые имена,
+        // старые сейвы не задеты), казарма и шахта — ориентиры без лута.
+        string[] forestModels = { "house", "hut", "cabin-shed", "barracks", "mine" };
+        int forestLootI = 0;
+        for (int i = 0; i < buildingSpots.Count && i < forestModels.Length; i++)
+        {
+            float yaw = (float)rng.NextDouble() * 360f;
+            float size = i == 3 ? 7.5f : 6.5f; // казарма крупнее
+            var forestGo = SpawnBuilding(townPrefab, forestModels[i], buildingSpots[i],
+                "Forest_" + i, size, yaw);
+            if (forestGo == null)
+            {
+                missing.AppendLine("forest: " + forestModels[i] + ".glb");
+                continue;
+            }
+            if (i == 0 || i == 2)
+            {
+                forestLootI++;
+                var bcol = forestGo.GetComponent<BoxCollider>();
+                float halfX = bcol != null ? Mathf.Max(bcol.size.x * 0.5f, 2f) : 3f;
+                Vector3 side = forestGo.transform.TransformPoint(
+                    new Vector3(halfX + 1.0f, 0f, 0f));
+                var fprop = SpawnTownPiece(townPrefab, "box-large-open",
+                    OnGround(side.x, side.z), "Forest_" + i + "_Box", 2.5f);
+                if (fprop != null)
+                    fprop.transform.rotation = Quaternion.Euler(0f,
+                        (float)rng.NextDouble() * 360f, 0f);
+                SpawnLootPoint(OnGround(side.x, side.z, 0.45f),
+                    "Loot_Forest_" + forestLootI, lootTable, 2);
             }
         }
 
@@ -1424,7 +1443,10 @@ public static class SetupMainScene
         => new Vector3(x, TerrainGen.HeightAt(x, z) + up, z);
 
     // Случайная точка кольца вокруг спауна, прочь от озера (seed → rng).
-    static Vector3 RandomPos(System.Random rng, float minR, float maxR)
+    // avoid/avoidDist: запретные пятна (пятна лесных построек) — дерево
+    // не должно прорастать сквозь дом.
+    static Vector3 RandomPos(System.Random rng, float minR, float maxR,
+        List<Vector2> avoid = null, float avoidDist = 0f)
     {
         for (int tries = 0; tries < 32; tries++)
         {
@@ -1437,6 +1459,17 @@ public static class SetupMainScene
             // дерево прорастало сквозь дом (фидбек плейтеста 2026-10-03)
             if (Vector2.Distance(new Vector2(x, z), TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f)
                 continue;
+            if (avoid != null)
+            {
+                bool blocked = false;
+                foreach (var a in avoid)
+                    if (Vector2.Distance(new Vector2(x, z), a) < avoidDist)
+                    {
+                        blocked = true;
+                        break;
+                    }
+                if (blocked) continue;
+            }
             // вырез пещеры в горе: низина внутри горы — это пол залы или
             // каньон-вход, деревьям/камням там не место (S/пещера 2026-10-03)
             if (TerrainGen.HeightAt(x, z) < TerrainGen.CaveFloor + 2f
@@ -1516,24 +1549,76 @@ public static class SetupMainScene
         col.size = size;
     }
 
-    // Дверной проём: сплошной бокс по габаритам запер бы дверь. По замеру
-    // GLB (панель x -0.2677..0.2677, глубина z -0.2677..-0.1788, проём
-    // |x| < 0.14 до y = 0.4875) ставим два косяка и перемычку над дверью
-    // (верх проёма 2.93 м при масштабе 6 — игрок проходит свободно).
-    static void AddDoorwayColliders(GameObject door)
+    // Цельная постройка из GLB (Quaternius/CreativeTrio, S 2026-10-04):
+    // нормирует размер по самому длинному горизонтальному габариту,
+    // сажает низ модели на землю (или на baseY — для постройки на настиле
+    // причала), утапливает на sink и вешает сплошной бокс-коллайдер по
+    // габаритам. Возвращает корень или null (нет GLB — строка в missing
+    // пишется на месте вызова).
+    static GameObject SpawnBuilding(Dictionary<string, GameObject> prefabs, string glb,
+        Vector2 xz, string goName, float targetSize, float yawDeg,
+        float sink = 0.25f, float baseY = float.NaN)
     {
-        const float s = 6f;
-        const float zC = -0.2233f * s; // центр полотна по глубине
-        const float zS = 0.0889f * s;  // глубина панели
-        foreach (float sx in new[] { -1f, 1f })
+        if (!prefabs.TryGetValue(glb, out var prefab)) return null;
+        var root = new GameObject(goName);
+        root.transform.position = float.IsNaN(baseY)
+            ? OnGround(xz.x, xz.y, -sink)
+            : new Vector3(xz.x, baseY, xz.y);
+        root.transform.rotation = Quaternion.Euler(0f, yawDeg, 0f);
+        var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        model.transform.SetParent(root.transform, false);
+
+        var b1 = LocalBounds(model);
+        float extent = Mathf.Max(b1.size.x, b1.size.z);
+        if (extent > 0.0001f)
+            model.transform.localScale = Vector3.one * (targetSize / extent);
+
+        // посадка: низ модели на уровень корня (пивот не обязан быть в полу)
+        var b2 = LocalBounds(model);
+        model.transform.localPosition += Vector3.down * b2.min.y;
+
+        AddPieceCollider(root);
+        return root;
+    }
+
+    // Габариты мешей потомков в ЛОКАЛЬНЫХ осях go: углы мешевых bounds
+    // проводятся через TransformPoint/InverseTransformPoint — размер не
+    // раздувается поворотом корня (та же математика, что AddPieceCollider).
+    static Bounds LocalBounds(GameObject go)
+    {
+        var lo = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+        var hi = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+        bool any = false;
+        foreach (var rend in go.GetComponentsInChildren<Renderer>())
         {
-            var jamb = door.AddComponent<BoxCollider>();
-            jamb.center = new Vector3(sx * (0.14f + 0.2677f) * 0.5f * s, 0.25f * s, zC);
-            jamb.size = new Vector3((0.2677f - 0.14f) * s, 0.5f * s, zS);
+            var mf = rend.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) continue;
+            var b = mf.sharedMesh.bounds;
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = rend.transform.TransformPoint(new Vector3(
+                    (i & 1) == 0 ? b.min.x : b.max.x,
+                    (i & 2) == 0 ? b.min.y : b.max.y,
+                    (i & 4) == 0 ? b.min.z : b.max.z));
+                var lp = go.transform.InverseTransformPoint(corner);
+                lo = Vector3.Min(lo, lp);
+                hi = Vector3.Max(hi, lp);
+                any = true;
+            }
         }
-        var head = door.AddComponent<BoxCollider>();
-        head.center = new Vector3(0f, (0.4875f + 0.5175f) * 0.5f * s, zC);
-        head.size = new Vector3(0.3126f * s, 0.03f * s, zS);
+        return any ? new Bounds((lo + hi) * 0.5f, hi - lo)
+                   : new Bounds(go.transform.position, Vector3.zero);
+    }
+
+    // Расстояние от точки до оси причала (луч из townC в море). Нужно,
+    // чтобы пятна построек, руины и силуэты не вырастали на настиле.
+    static float PierLineDist(Vector2 p)
+    {
+        Vector2 dir = TerrainGen.TownCenter.normalized; // наружу, к морю
+        Vector2 rel = p - TerrainGen.TownCenter;
+        float proj = Vector2.Dot(rel, dir);
+        if (proj < 0f) return float.MaxValue; // причал только в сторону моря
+        return (rel - dir * proj).magnitude;
     }
 
     // Точка лута: невидимый контейнер LootContainer под обычным (НЕ

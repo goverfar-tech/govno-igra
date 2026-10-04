@@ -13,8 +13,10 @@ public class Player : MonoBehaviour
     public float crouchSpeed = 2f;
     public float jumpHeight = 1.1f;
     public float gravity = -18f;
-    public float standHeight = 1.8f;
-    public float crouchHeight = 1.0f;
+    // Игрок выше за счёт ног (S/тело 2026-10-04): ведро стоит на ножках
+    // (BucketRig, LegHeight 0.55) — капсула и камера выросли вместе.
+    public float standHeight = 2.2f;
+    public float crouchHeight = 1.25f;
 
     [Header("Камера")]
     public Transform head;          // дочерний объект с Camera
@@ -47,6 +49,9 @@ public class Player : MonoBehaviour
     public Inventory Inventory { get; private set; }
     public Stats Stats { get; private set; }
     public float Pitch => pitch;
+    // Для BucketRig (анимация конечностей) и тестовых систем:
+    public bool IsCrouching => isCrouchingSmooth;
+    public bool IsFlying => fly;
 
     CharacterController cc;
     float pitch;
@@ -55,6 +60,22 @@ public class Player : MonoBehaviour
     bool inputBlocked;              // открыта панель инвентаря
     IInteractable focus;
     string lastPrompt;
+
+    // --- вид от третьего лица (S/камера 2026-10-04): клавиша V,
+    // выбор переживает перезапуск через PlayerPrefs (как ползунки
+    // настроек; галочка в SettingsPanel — за UI-потоком, не лезем) ---
+    public bool thirdPerson;
+    const float TpDist = 3.4f;      // дистанция камеры за спиной
+    const float TpShoulder = 0.3f;  // подъём над головой
+    const string TpPrefKey = "cam_thirdPerson";
+
+    // --- тестовый noclip-полёт (F1): облёт мира для проверок. Сквозь
+    // стены, без гравитации и океана; утечка заморожена (Move выходит
+    // раньше Stats.Tick). Сознательно чит — только для разработки. ---
+    bool fly;
+    const float FlySpeed = 22f;
+
+    BucketRig rig;                  // конечности; ленивый поиск (AddComponent-порядок)
 
     // Вид-модель выбранного предмета в руке (S): ребёнок головы,
     // размер нормируется независимо от масштаба GLB; коллайдеры у копии
@@ -115,6 +136,9 @@ public class Player : MonoBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+        // сохранённый выбор вида (V) — как ползунки настроек
+        thirdPerson = PlayerPrefs.GetInt(TpPrefKey, 0) == 1;
     }
 
     void OnEnable()
@@ -153,6 +177,27 @@ public class Player : MonoBehaviour
         bool uiOwnsInput = inputBlocked || Time.timeScale <= 0f
                            || Cursor.lockState != CursorLockMode.Locked;
         if (!uiOwnsInput) Look();
+        if (!uiOwnsInput)
+        {
+            // V — вид первое/третье лицо (запоминается), F1 — тестовый полёт
+            if (Input.GetKeyDown(KeyCode.V))
+            {
+                thirdPerson = !thirdPerson;
+                PlayerPrefs.SetInt(TpPrefKey, thirdPerson ? 1 : 0);
+                PlayerPrefs.Save();
+                GameEvents.RaiseNotify(thirdPerson
+                    ? "Вид: от третьего лица"
+                    : "Вид: от первого лица");
+            }
+            if (Input.GetKeyDown(KeyCode.F1))
+            {
+                fly = !fly;
+                if (fly) verticalVel = 0f;
+                GameEvents.RaiseNotify(fly
+                    ? "Режим полёта (тест): F1 — выйти. WASD + Space/Ctrl, Shift — быстрее"
+                    : "Режим полёта выключен");
+            }
+        }
         Move(uiOwnsInput);
         if (uiOwnsInput)
         {
@@ -170,6 +215,8 @@ public class Player : MonoBehaviour
                 AudioManager.Swing();
                 GameEvents.RaiseWorldHit(rn.transform.position);
                 landOffset = Mathf.Max(landOffset - 0.045f, -0.09f);
+                if (rig == null) rig = GetComponent<BucketRig>();
+                if (rig != null) rig.PlaySwing(); // рука тоже машет при рубке
             }
             focus.Interact(this);
         }
@@ -233,6 +280,8 @@ public class Player : MonoBehaviour
         swingCooldown = 0.6f;
         AudioManager.Swing(); // замах слышен всегда, даже в молоко
         landOffset = Mathf.Max(landOffset - 0.05f, -0.1f);
+        if (rig == null) rig = GetComponent<BucketRig>();
+        if (rig != null) rig.PlaySwing(); // анимация замаха правой рукой
 
         var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
         // QueryTriggerInteraction.Ignore: удар не должен ловить мелкие
@@ -433,6 +482,35 @@ public class Player : MonoBehaviour
             float targetFov = Mathf.Min(GameSettings.Fov * (sprintNow ? sprintFovKick : 1f), 100f);
             cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFov, Time.deltaTime * 6f);
         }
+
+        // --- вид: первое/третье лицо (V, S/камера 2026-10-04) ---
+        // Третье лицо: камера на плече за головой, дистанция честно
+        // упирается в стены (RaycastAll — свой CharacterController/конечности
+        // в счёт не идут, иначе капсула «съедала» бы весь луч изнутри).
+        if (cam != null)
+        {
+            if (thirdPerson)
+            {
+                Vector3 pivot = head.position;
+                Vector3 desired = head.TransformPoint(new Vector3(0f, TpShoulder, -TpDist));
+                Vector3 back = desired - pivot;
+                float dist = back.magnitude;
+                if (dist > 0.01f)
+                {
+                    float blocked = float.MaxValue;
+                    foreach (var h2 in Physics.RaycastAll(pivot, back / dist, dist,
+                                 ~0, QueryTriggerInteraction.Ignore))
+                        if (!h2.collider.transform.IsChildOf(transform)
+                            && h2.distance < blocked)
+                            blocked = h2.distance;
+                    if (blocked < float.MaxValue)
+                        dist = Mathf.Max(blocked - 0.15f, 0.3f);
+                }
+                cam.transform.localPosition = new Vector3(0f, TpShoulder, -dist);
+            }
+            else if (cam.transform.localPosition.sqrMagnitude > 0.000001f)
+                cam.transform.localPosition = Vector3.zero; // возврат в голову
+        }
     }
 
     void Look()
@@ -460,6 +538,21 @@ public class Player : MonoBehaviour
         float speed = crouching ? crouchSpeed
                     : sprinting ? walkSpeed * sprintMultiplier
                     : walkSpeed;
+
+        // Тестовый полёт (F1): noclip — прямое движение трансформом сквозь
+        // геометрию; гравитация, океан и утопление не действуют, утечка
+        // заморожена (до Stats.Tick в конце Move мы не доходим).
+        if (fly)
+        {
+            float up = 0f;
+            if (Input.GetKey(KeyCode.Space)) up += 1f;
+            if (Input.GetKey(KeyCode.LeftControl)) up -= 1f;
+            Vector3 flyDir = ((head != null ? head.forward : transform.forward) * v
+                              + transform.right * h + Vector3.up * up).normalized;
+            float flySpd = FlySpeed * (Input.GetKey(KeyCode.LeftShift) ? 3f : 1f);
+            transform.position += flyDir * flySpd * Time.deltaTime;
+            return;
+        }
 
         // плавный присед: высота капсулы ползёт, голова следом (R1)
         float targetHeight = crouching ? crouchHeight : standHeight;

@@ -211,16 +211,19 @@ public static class SetupMainScene
         if (capsuleRend != null) Object.DestroyImmediate(capsuleRend);
 
         var cc = playerGo.AddComponent<CharacterController>();
-        cc.height = 1.8f;
+        // Игрок выше за счёт ног (S/тело 2026-10-04): ведро на ножках
+        // (BucketRig, LegHeight 0.55) — капсула 2.2, камера 1.95.
+        cc.height = 2.2f;
         cc.radius = 0.35f;
         cc.center = new Vector3(0f, 0f, 0f);
 
         var player = playerGo.AddComponent<Player>(); // Inventory/Stats подтянутся сами
-        player.standHeight = 1.8f;
+        player.standHeight = 2.2f;
+        player.crouchHeight = 1.25f;
 
         var head = new GameObject("Head");
         head.transform.SetParent(playerGo.transform, false);
-        head.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+        head.transform.localPosition = new Vector3(0f, 1.95f, 0f);
         var cam = head.AddComponent<Camera>();
         cam.tag = "MainCamera";
         cam.nearClipPlane = 0.05f; // иначе объекты «исчезают» вплотную к камере
@@ -229,15 +232,17 @@ public static class SetupMainScene
 
         // --- тело-ведро «курочка яба» (§9.1) ---
         // Панель этикетки в GLB смотрит в -z, вперёд игрока +z -> разворот
-        // на 180°. Рост ведра 1.2 м: обод на 1.3 м ниже камеры (1.6) и при
-        // прямом взгляде в кадр не лезет, при взгляде вниз видно майонез.
+        // на 180°. Ведро стоит НА ножках BucketRig (подъём 0.55): рост тела
+        // 1.75, камера на 1.3 выше обода — при взгляде вниз видно майонез.
         var bucketModel = LoadModel("mayo-bucket");
         if (bucketModel != null)
         {
             var bucket = (GameObject)PrefabUtility.InstantiatePrefab(bucketModel);
             bucket.name = "BucketBody";
             bucket.transform.SetParent(playerGo.transform, false);
-            bucket.transform.localPosition = new Vector3(0f, -cc.height / 2f, 0f); // дно на земле
+            // дно ведра — на ногах: пивот игрока посреди капсулы 2.2,
+            // низ капсулы на -1.1, ноги 0.55 -> ведро на -0.55
+            bucket.transform.localPosition = new Vector3(0f, -cc.height / 2f + 0.55f, 0f);
             bucket.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             var rends = bucket.GetComponentsInChildren<Renderer>();
             if (rends.Length > 0)
@@ -258,12 +263,17 @@ public static class SetupMainScene
             if (mayoCol != null) Object.DestroyImmediate(mayoCol);
             mayoGo.name = "MayoInside";
             mayoGo.transform.SetParent(playerGo.transform, false);
-            mayoGo.transform.localPosition = new Vector3(0f, -cc.height / 2f + 0.9f, 0f);
+            mayoGo.transform.localPosition =
+                new Vector3(0f, -cc.height / 2f + 0.55f + 0.9f, 0f); // верх ведра, как раньше 75% высоты
             mayoGo.transform.localScale = new Vector3(1.0f, 0.05f, 1.0f); // r=0.5, толщина 0.1 м
             mayoGo.GetComponent<MeshRenderer>().sharedMaterial = mayoBodyMat;
         }
         else
             missing.AppendLine("player body: mayo-bucket.glb (ведро игрока)");
+
+        // конечности с процедурной анимацией (S/тело 2026-10-04):
+        // ноги/руки из кубов, замахи от Player.SwingTool/E-рубки
+        playerGo.AddComponent<BucketRig>();
 
         // --- временный HUD ---
         var hud = new GameObject("DebugHud");
@@ -374,8 +384,6 @@ public static class SetupMainScene
                 if (Vector2.Distance(p, TerrainGen.TownCenter) < TerrainGen.TownRadius + 12f) continue;
                 if (Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 12f)
                     continue;
-                if (Vector2.Distance(p, TerrainGen.FactoryCenter) < TerrainGen.FactoryRadius + 12f)
-                    continue; // пятна построек не на промплощадке (X5)
                 if (PierLineDist(p) < 12f) continue; // не на оси причала
                 float hMin = float.MaxValue, hMax = float.MinValue;
                 for (int c = 0; c < 4; c++)
@@ -414,12 +422,27 @@ public static class SetupMainScene
             tc.radius = 0.3f;
             var tn = t.AddComponent<ResourceNode>();
             tn.yield = wood; tn.hitsLeft = 3; tn.pickupPrefab = pickupPrefabAsset;
-            // банка-подвеска (X3, §9.3): каждый ~10-й деревянный узел —
-            // источник сока (за ночь, сбор по E). MayoTreeTap добавляется
-            // СТРОГО после ResourceNode: на корне дерева первым IInteractable
-            // должен оставаться рубильный узел, иначе луч по стволу сломается.
-            if (i % 10 == 0)
+            // банка-подвеска (X3, §9.3): РЕДКО — каждый 40-й деревянный
+            // узел (~31 на острове из 1250). Сок — безопасная еда без
+            // яда, и если бы банки висели на каждом десятом дереве,
+            // утечка переставала бы давить (реплика автора 2026-10-04:
+            // «убивает экономику хп»). MayoTreeTap добавляется СТРОГО
+            // после ResourceNode: на корне дерева первым IInteractable
+            // должен оставаться рубильный узел, иначе луч по стволу
+            // сломается. Дерево красим в бледно-майонезный — источник
+            // сока читается издалека и не путается с обычным лесом.
+            if (i % 40 == 0)
             {
+                foreach (var rend in t.GetComponentsInChildren<Renderer>())
+                {
+                    // materials (не sharedMaterials): инстансы только этих
+                    // деревьев — обычный лес остаётся прежнего цвета
+                    var mats = rend.materials;
+                    for (int m = 0; m < mats.Length; m++)
+                        mats[m].color = Color.Lerp(mats[m].color,
+                            new Color(0.93f, 0.88f, 0.62f), 0.75f);
+                    rend.materials = mats;
+                }
                 var tap = t.AddComponent<MayoTreeTap>();
                 tap.juiceItem = juice;
                 tap.sideAngle = (float)rng.NextDouble() * 360f; // сторона банки
@@ -566,12 +589,13 @@ public static class SetupMainScene
 
         // таблица лута контейнеров: фляга, дерево, камень, майонез, котлета
         var lootTable = new ItemData[] { flask, wood, stone, mayo, cookedMeat };
-        // Зонный лут (X2/X5, §9.4): чем дальше от города, тем жирнее
+        // Зонный лут (X2, §9.4): чем дальше от города, тем жирнее
         // герметики. Точки гарантированно существуют (не лотерея §9.3),
         // роллы — по curated-таблице: «достать можно всегда, но с затратами».
+        // (Завод снесён 2026-10-04 — станет отдельной локацией; весь
+        // герметиковый спектр переехал в руины по кольцу острова.)
         var lootTableForest = new ItemData[] { flask, wood, stone, mayo, cookedMeat, resin };
-        var lootTableRuins = new ItemData[] { flask, wood, stone, mayo, cookedMeat, resin, wax };
-        var lootTableFactory = new ItemData[] { wax, bitumen, bitumen, mayo, cookedMeat, flask };
+        var lootTableRuins = new ItemData[] { flask, wood, stone, mayo, cookedMeat, resin, wax, bitumen };
 
         // прогрев кусков городка: LoadModel синхронно реимпортирует GLB,
         // на 200+ кусков дешевле один проход. Тип без ассета пишет одну
@@ -1125,8 +1149,6 @@ public static class SetupMainScene
                 if (TerrainGen.IsInOcean(new Vector3(x, 1f, z))) continue;
                 if (TerrainGen.HeightAt(x, z) < TerrainGen.SeaLevel + 0.5f) continue;
                 if (PierLineDist(new Vector2(x, z)) < 8f) continue; // не сквозь причал
-                if (Vector2.Distance(new Vector2(x, z), TerrainGen.FactoryCenter)
-                    < TerrainGen.FactoryRadius + 12f) continue; // не на промплощадке
                 bool tooCloseSpot = false;
                 foreach (var sp in buildingSpots)
                     if (Vector2.Distance(new Vector2(x, z), sp) < 25f)
@@ -1257,18 +1279,6 @@ public static class SetupMainScene
             }
         }
 
-        // --- Завод (X5, §9.4): структура на промплощадке — цех/труба/
-        // силосы/забор/декор; финальный пресс будет позже (фаза 4).
-        // Зона 3 «Промзона» — герметиковый конец пути.
-        FactoryBuilder.Build(rng, msg => missing.AppendLine(msg));
-        // лут Завода: два контейнера в цехе, битумная таблица
-        SpawnLootPoint(new Vector3(TerrainGen.FactoryCenter.x - 6f,
-            TerrainGen.FactoryHeight + 0.45f, TerrainGen.FactoryCenter.y + 6f),
-            "Loot_Factory_1", lootTableFactory, 2);
-        SpawnLootPoint(new Vector3(TerrainGen.FactoryCenter.x + 7f,
-            TerrainGen.FactoryHeight + 0.45f, TerrainGen.FactoryCenter.y - 5f),
-            "Loot_Factory_2", lootTableFactory, 2);
-
         // --- зомби-спавнер (M5): 6 зомби каждую ночь кольцом вокруг игрока,
         // +1 за каждую ночь до 14 (автор просил больше зомби) ---
         var spawnerGo = new GameObject("ZombieSpawner");
@@ -1325,8 +1335,6 @@ public static class SetupMainScene
                 if (Vector2.Distance(p, TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f) continue;
                 if (Vector2.Distance(p, TerrainGen.MountainCenter) < TerrainGen.MountainRadius + 10f)
                     continue; // вся гора, включая логово босса — зона запрета
-                if (Vector2.Distance(p, TerrainGen.FactoryCenter) < TerrainGen.FactoryRadius + 10f)
-                    continue; // и промплощадка Завода — не куриный двор (X5)
                 bool tooClose = false;
                 for (int prev = 0; prev < chickenCount; prev++)
                     if (Vector2.Distance(p, chickenPts[prev]) < 120f) { tooClose = true; break; }
@@ -1509,9 +1517,6 @@ public static class SetupMainScene
             // случайная растительность/пропсы не растут в городке — иначе
             // дерево прорастало сквозь дом (фидбек плейтеста 2026-10-03)
             if (Vector2.Distance(new Vector2(x, z), TerrainGen.TownCenter) < TerrainGen.TownRadius + 2f)
-                continue;
-            // и на промплощадке Завода им не место (X5)
-            if (Vector2.Distance(new Vector2(x, z), TerrainGen.FactoryCenter) < TerrainGen.FactoryRadius + 6f)
                 continue;
             if (avoid != null)
             {

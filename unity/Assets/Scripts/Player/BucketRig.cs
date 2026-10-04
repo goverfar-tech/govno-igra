@@ -20,6 +20,9 @@ public class BucketRig : MonoBehaviour
     const float ArmLen = 0.5f;       // длина руки от плеча
     const float SwingTime = 0.45f;   // короче swingCooldown (0.6) — замах вписывается
     const float WalkRefSpeed = 6.4f; // walk×sprint игрока — нормировка маха
+    const float StrideLength = 1.05f; // длина шага: фаза маха привязана к ПУТИ,
+                                      // иначе ноги скользят по земле (фидбек
+                                      // автора 2026-10-04 «скорость сломалась»)
 
     Player player;
     CharacterController cc;
@@ -38,18 +41,25 @@ public class BucketRig : MonoBehaviour
 
     void Build()
     {
-        if (limbMat == null)
-        {
-            limbMat = new Material(Shader.Find("Standard"))
-                { color = new Color(0.92f, 0.90f, 0.86f) }; // белое ведро-пластик
-            mittenMat = new Material(Shader.Find("Standard"))
-                { color = new Color(0.93f, 0.88f, 0.62f) }; // «руки в майонезе»
-        }
+        EnsureMaterials();
         legL = Limb("LegL", new Vector3(-LegHalf, LegHeight, 0f), LegSize, LegHeight, limbMat);
         legR = Limb("LegR", new Vector3(LegHalf, LegHeight, 0f), LegSize, LegHeight, limbMat);
         armL = Limb("ArmL", new Vector3(-ArmHalf, ShoulderY, 0f), ArmSize, ArmLen, mittenMat);
         armR = Limb("ArmR", new Vector3(ArmHalf, ShoulderY, 0f), ArmSize, ArmLen, mittenMat);
     }
+
+    static void EnsureMaterials()
+    {
+        if (mittenMat != null) return;
+        limbMat = new Material(Shader.Find("Standard"))
+            { color = new Color(0.92f, 0.90f, 0.86f) }; // белое ведро-пластик
+        mittenMat = new Material(Shader.Find("Standard"))
+            { color = new Color(0.93f, 0.88f, 0.62f) }; // «руки в майонезе»
+    }
+
+    // Материал рук для FP-предплечья (Player.Awake строит руку раньше,
+    // чем BucketRig.Start — ленивая инициализация общих материалов).
+    public static Material GetArmMaterial() { EnsureMaterials(); return mittenMat; }
 
     // Пивот конечности — в суставе (бедро/плечо), куб свисает вниз:
     // вращение пивота даёт честный мах (как руки зомби).
@@ -125,9 +135,11 @@ public class BucketRig : MonoBehaviour
             return;
         }
 
-        // шаг/бег: частота и амплитуда от скорости; присед — семенит мельче
-        phase += dt * (5f + speedNorm * 7f);
-        float amp = Mathf.Lerp(4f, player.IsCrouching ? 24f : 38f, speedNorm);
+        // шаг/бег: фаза идёт от РЕАЛЬНОГО пути (скорость × шаг), а не от
+        // таймера — стопа не скользит; на месте фаза стоит, ноги не дёргаются
+        if (speedNorm > 0.04f)
+            phase += dt * hv.magnitude * Mathf.PI / StrideLength;
+        float amp = Mathf.Lerp(0f, player.IsCrouching ? 26f : 36f, speedNorm);
         float swing = Mathf.Sin(phase) * amp;
         legL.localRotation = Quaternion.Euler(swing, 0f, 0f);
         legR.localRotation = Quaternion.Euler(-swing, 0f, 0f);

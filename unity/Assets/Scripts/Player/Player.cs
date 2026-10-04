@@ -65,8 +65,8 @@ public class Player : MonoBehaviour
     // выбор переживает перезапуск через PlayerPrefs (как ползунки
     // настроек; галочка в SettingsPanel — за UI-потоком, не лезем) ---
     public bool thirdPerson;
-    const float TpDist = 3.4f;      // дистанция камеры за спиной
-    const float TpShoulder = 0.3f;  // подъём над головой
+    const float TpDist = 4.3f;      // за спиной (Minecraft ≈ 4 блока)
+    const float TpShoulder = 0.7f;  // слегка НАД головой (Minecraft-style)
     const string TpPrefKey = "cam_thirdPerson";
 
     // --- тестовый noclip-полёт (F1): облёт мира для проверок. Сквозь
@@ -77,13 +77,21 @@ public class Player : MonoBehaviour
 
     BucketRig rig;                  // конечности; ленивый поиск (AddComponent-порядок)
 
-    // Вид-модель выбранного предмета в руке (S): ребёнок головы,
-    // размер нормируется независимо от масштаба GLB; коллайдеры у копии
-    // отбираем — рука не должна ловить столкновения.
+    // Вид-модель выбранного предмета в руке (S): FP-рука в стиле Minecraft —
+    // предплечье из нижнего правого угла держит предмет; анимации: свэй
+    // походки, замах-дуга (ЛКМ/E-рубка), всход предмета при смене слота.
+    // Ребёнок головы — наследует headbob и поворот камеры автоматически.
+    Transform fpRig;
     Transform hand;
     GameObject handModel;
     ItemData handItem;
     const float handSize = 0.42f;
+    static readonly Vector3 FpHandBase = new Vector3(0.40f, -0.44f, 0.58f);
+    static readonly Quaternion FpHandRot = Quaternion.Euler(-6f, -18f, 4f);
+    float fpSwingT = -1f;           // >=0 — идёт замах FP-руки
+    float fpEquipT = 1f;            // <1 — предмет всходит после смены слота
+    const float FpSwingTime = 0.28f;
+    const float FpEquipTime = 0.32f;
 
     // Точка возрождения (§9.5): последний костёр, у которого грелись
     // (ставит Campfire в Update, пока игрок в радиусе тепла).
@@ -124,14 +132,24 @@ public class Player : MonoBehaviour
         lastCampfirePos = default;
         hasCampfireSpawn = false;
 
-        // якорь «в руке»: правее-ниже центра экрана, чуть повёрнут внутрь.
-        // Вид-модель ребёнок головы — наследует headbob автоматически.
+        // FP-рука (Minecraft-style): предплечье-куб из нижнего правого угла
+        // (материал общий с руками тела), на его конце — вид-модель предмета
         if (head != null)
         {
+            fpRig = new GameObject("FpArms").transform;
+            fpRig.SetParent(head, false);
             hand = new GameObject("Hand").transform;
-            hand.SetParent(head, false);
-            hand.localPosition = new Vector3(0.38f, -0.34f, 0.62f);
-            hand.localRotation = Quaternion.Euler(-6f, -18f, 4f);
+            hand.SetParent(fpRig, false);
+            hand.localPosition = FpHandBase;
+            hand.localRotation = FpHandRot;
+            var armGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(armGo.GetComponent<BoxCollider>());
+            armGo.name = "FpArm";
+            armGo.transform.SetParent(fpRig, false);
+            armGo.transform.localPosition = new Vector3(0.11f, -0.33f, 0.28f);
+            armGo.transform.localRotation = Quaternion.Euler(-52f, -14f, 6f);
+            armGo.transform.localScale = new Vector3(0.10f, 0.10f, 0.62f);
+            armGo.GetComponent<MeshRenderer>().sharedMaterial = BucketRig.GetArmMaterial();
         }
 
         Cursor.lockState = CursorLockMode.Locked;
@@ -217,6 +235,7 @@ public class Player : MonoBehaviour
                 landOffset = Mathf.Max(landOffset - 0.045f, -0.09f);
                 if (rig == null) rig = GetComponent<BucketRig>();
                 if (rig != null) rig.PlaySwing(); // рука тоже машет при рубке
+                fpSwingT = FpSwingTime;
             }
             focus.Interact(this);
         }
@@ -282,6 +301,7 @@ public class Player : MonoBehaviour
         landOffset = Mathf.Max(landOffset - 0.05f, -0.1f);
         if (rig == null) rig = GetComponent<BucketRig>();
         if (rig != null) rig.PlaySwing(); // анимация замаха правой рукой
+        fpSwingT = FpSwingTime;           // дуга FP-руки (Minecraft-style)
 
         var origin = head != null ? head.position : transform.position + Vector3.up * 1.6f;
         // QueryTriggerInteraction.Ignore: удар не должен ловить мелкие
@@ -366,6 +386,7 @@ public class Player : MonoBehaviour
         var item = Inventory.slots[Inventory.selected].item;
         if (item == handItem) return;
         handItem = item;
+        fpEquipT = 0f; // предмет всходит снизу при смене слота (Minecraft-style)
         if (handModel != null) { Destroy(handModel); handModel = null; }
         if (item == null || item.worldModel == null || hand == null) return;
 
@@ -484,16 +505,45 @@ public class Player : MonoBehaviour
         }
 
         // --- вид: первое/третье лицо (V, S/камера 2026-10-04) ---
-        // Вид-модель в руке — элемент первого лица: в третьем лице она
-        // висела бы у головы отдельным предметом — прячем.
-        if (handModel != null)
+        // FP-рука — элемент первого лица: в третьем лице тело видно целиком
+        // (настоящие руки BucketRig), предплечье и предмет прячем.
+        if (fpRig != null)
         {
-            bool wantHand = !thirdPerson;
-            if (handModel.activeSelf != wantHand) handModel.SetActive(wantHand);
+            bool wantFp = !thirdPerson;
+            if (fpRig.gameObject.activeSelf != wantFp) fpRig.gameObject.SetActive(wantFp);
         }
-        // Третье лицо: камера на плече за головой, дистанция честно
-        // упирается в стены (RaycastAll — свой CharacterController/конечности
-        // в счёт не идут, иначе капсула «съедала» бы весь луч изнутри).
+        // Анимации FP-руки: свэй походки восьмёркой от фазы шага, дыхание
+        // в покое, замах — дуга вниз-влево (Minecraft-style), предмет
+        // всходит снизу при смене слота.
+        if (fpRig != null && hand != null && fpRig.gameObject.activeSelf)
+        {
+            Vector3 hv2 = cc.velocity; hv2.y = 0f;
+            float sNorm = Mathf.Clamp01(hv2.magnitude / (walkSpeed * sprintMultiplier));
+            Vector3 offset = new Vector3(Mathf.Sin(bobPhase) * 0.035f,
+                -Mathf.Abs(Mathf.Cos(bobPhase)) * 0.03f, 0f) * sNorm;
+            offset.y += Mathf.Sin(Time.time * 1.7f) * 0.006f; // дыхание
+            float s = 0f;
+            if (fpSwingT >= 0f)
+            {
+                fpSwingT -= Time.deltaTime;
+                s = Mathf.Sin(Mathf.Clamp01(1f - fpSwingT / FpSwingTime) * Mathf.PI);
+            }
+            float eq = 0f;
+            if (fpEquipT < 1f)
+            {
+                fpEquipT += Time.deltaTime / FpEquipTime;
+                eq = 1f - Mathf.Clamp01(fpEquipT);
+            }
+            hand.localPosition = FpHandBase + offset
+                + new Vector3(-0.16f * s, -0.26f * s, -0.08f * s)
+                + new Vector3(0f, -0.5f * eq, -0.1f * eq);
+            hand.localRotation = FpHandRot
+                * Quaternion.Euler(-65f * s, -22f * s, -28f * s);
+        }
+        // Третье лицо (референс Minecraft): камера слегка НАД головой и
+        // дальше за спиной, дистанция честно упирается в стены
+        // (RaycastAll — свой CharacterController/конечности в счёт не
+        // идут, иначе капсула «съедала» бы весь луч изнутри).
         if (cam != null)
         {
             if (thirdPerson)

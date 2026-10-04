@@ -79,6 +79,15 @@ public class ZombieSpawner : MonoBehaviour
                 continue;
             if (TerrainGen.IsInOcean(new Vector3(x, h + 1f, z)))
                 continue;
+            // логово босса — заповедник FatZombie: пол пещеры (вырез
+            // внутри footprint горы ниже CaveFloor+2) не спавнит ночную
+            // стаю — иначе сейв/загрузка в зале ночью давала зомби прямо
+            // в логове (репро 2026-10-04). Правило то же, что у деревьев
+            // в RandomPos (SetupMainScene).
+            if (h < TerrainGen.CaveFloor + 2f
+                && Vector2.Distance(new Vector2(x, z), TerrainGen.MountainCenter)
+                    < TerrainGen.MountainRadius + 6f)
+                continue;
             // фактическая дистанция до игрока (радиус берётся не меньше
             // minDist — проверка страхует на случай возврата клэмпа)
             if (Vector2.Distance(new Vector2(x, z), new Vector2(pp.x, pp.z)) < minDist)

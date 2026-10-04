@@ -31,8 +31,46 @@ public class FatZombie : MonoBehaviour
     // рестарта сцены («Начать заново»), Setup по FatZombie.Dead не спавнит.
     static bool dead;
     public static bool Dead => dead;
-    public static void Restore(bool d) => dead = d;     // из сейва (Load)
+    // Из сейва (SaveSystem.Load). Статики мало: живой экземпляр мог
+    // появиться ДО загрузки (Awake отработал на старте сцены со свежей
+    // статикой), и ранний `if (dead) return` в Update/TakeDamage тогда
+    // замораживал его навсегда — стоит в логове неподвижно и урона не
+    // ловит (репро: убить босса → перезайти в Play → загрузить сейв).
+    // Поэтому сверяемся с сейвом в ОБЕ стороны: «убит» — живой экземпляр
+    // тихо удаляется (без дропа и тостов: лут уже выпадал в тот раз);
+    // «жив», а экземпляра нет (самоуничтожился в Awake по устаревшей
+    // статике) — респавн в логове по параметрам Setup.
+    public static void Restore(bool d)
+    {
+        dead = d;
+        var live = FindFirstObjectByType<FatZombie>();
+        if (d)
+        {
+            if (live != null) Destroy(live.gameObject);
+        }
+        else if (live == null)
+        {
+            RespawnAtLair();
+        }
+    }
     public static bool CaptureDead() => dead;           // в сейв (Save)
+
+    // Респавн 1:1 с Setup (SetupMainScene, блок «босс»): центр залы,
+    // CharacterController 2.6/0.9, дроп — мясо из Resources.
+    static void RespawnAtLair()
+    {
+        Vector2 mtC = TerrainGen.MountainCenter;
+        var go = new GameObject("FatBoss");
+        go.transform.position = new Vector3(mtC.x, TerrainGen.CaveFloor + 0.2f, mtC.y);
+        var cc = go.AddComponent<CharacterController>();
+        cc.height = 2.6f;
+        cc.radius = 0.9f;
+        cc.center = new Vector3(0f, 1.3f, 0f);
+        var boss = go.AddComponent<FatZombie>();
+        boss.dropItem = Resources.Load<ItemData>("Items/meat");
+        var inv = FindFirstObjectByType<Inventory>();
+        if (inv != null) boss.pickupPrefab = inv.pickupPrefab;
+    }
 
     enum State { Sleep, Chase, Attack, Home }
     State state = State.Sleep;

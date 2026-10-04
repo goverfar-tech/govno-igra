@@ -331,9 +331,11 @@ public class SaveSystem : MonoBehaviour
         if (data.looted != null) LootContainer.Restore(data.looted);
         Minimap.DecodeFog(data.exploredFog);
 
-        // Босс (FatZombie): Restore ставит статику — Setup не спавнит
-        // убитого на след. старте сцены, живой экземпляр (если вдруг есть)
-        // уничтожится сам в Awake. Старый сейв v2 без поля → false → жив.
+        // Босс (FatZombie): Restore сверяет мир с сейвом в ОБЕ стороны —
+        // «убит» сносит живой экземпляр тихо (раньше тот замирал: Update/
+        // TakeDamage ранним if(dead) return — репро 2026-10-04), «жив» без
+        // экземпляра — респавнит в логове. Старый сейв v2 без поля →
+        // false → жив.
         FatZombie.Restore(data.bossDead);
 
         var dayNight = FindFirstObjectByType<DayNight>();
